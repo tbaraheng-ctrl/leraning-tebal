@@ -471,27 +471,16 @@
             let groupOptions = subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('');
 
             container.innerHTML = `
-                <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-                    <h3 class="text-lg font-bold text-navy mb-4"><i class="fas fa-plus-circle text-gold mr-2"></i>ฟอร์มเพิ่ม/แก้ไข ข้อมูลครู</h3>
-                    <form id="teacherForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <input type="hidden" id="t_id">
-                        <div><label class="text-sm">ชื่อ-สกุล</label><input type="text" id="t_name" required class="w-full border rounded p-2"></div>
-                        <div><label class="text-sm">กลุ่มสาระ</label><select id="t_group" required class="w-full border rounded p-2"><option value="">เลือก...</option>${groupOptions}</select></div>
-                        <div><label class="text-sm">บทบาท</label><select id="t_role" required class="w-full border rounded p-2"><option value="user">User (ครู)</option><option value="admin">Admin (ผู้ดูแล)</option></select></div>
-                        <div><label class="text-sm">ชื่อผู้ใช้</label><input type="text" id="t_user" required class="w-full border rounded p-2"></div>
-                        <div><label class="text-sm">รหัสผ่าน</label><input type="text" id="t_pass" required class="w-full border rounded p-2"></div>
-                        <div class="flex items-end space-x-2">
-                            <button type="submit" id="t_btn_save" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 w-full">บันทึก</button>
-                            <button type="button" id="t_btn_cancel" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500 hidden w-full" onclick="resetTeacherForm()">ยกเลิก</button>
-                        </div>
-                    </form>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto">
+                <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative">
                     <div class="mb-4 flex justify-between items-center">
                         <h3 class="text-lg font-bold text-navy">ตารางข้อมูลครู</h3>
-                        <select id="filter_t_group" class="border rounded p-1 text-sm" onchange="filterTeacherTable()">
-                            <option value="all">ทุกกลุ่มสาระ</option>${groupOptions}
-                        </select>
+                        <div class="flex items-center gap-2">
+                            <button onclick="openTeacherModal()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 text-sm shadow transition hover:-translate-y-0.5"><i class="fas fa-plus mr-1"></i> เพิ่มข้อมูลครู</button>
+                            <button onclick="refreshTeacherTable()" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-2 rounded text-sm transition" title="ดึงข้อมูลล่าสุด"><i class="fas fa-sync-alt"></i></button>
+                            <select id="filter_t_group" class="border rounded p-2 text-sm" onchange="filterTeacherTable()">
+                                <option value="all">ทุกกลุ่มสาระ</option>${groupOptions}
+                            </select>
+                        </div>
                     </div>
                     <table class="w-full text-sm text-left border-collapse" id="teacherTable">
                         <thead class="bg-navy text-white">
@@ -499,6 +488,31 @@
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+
+                <!-- ป๊อปอัพฟอร์มข้อมูลครู -->
+                <div id="teacherModal" class="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center hidden">
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden transform transition-all">
+                        <div class="bg-navy text-white px-6 py-4 flex justify-between items-center">
+                            <h3 class="font-bold text-lg" id="teacherModalTitle">เพิ่มข้อมูลครู</h3>
+                            <button onclick="closeTeacherModal()" class="text-gray-300 hover:text-white focus:outline-none">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <form id="teacherForm" class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <input type="hidden" id="t_id">
+                            <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1">ชื่อ-สกุล</label><input type="text" id="t_name" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                            <div><label class="block text-sm font-medium mb-1">กลุ่มสาระ</label><select id="t_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${groupOptions}</select></div>
+                            <div><label class="block text-sm font-medium mb-1">บทบาท</label><select id="t_role" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="user">User (ครู)</option><option value="admin">Admin (ผู้ดูแล)</option></select></div>
+                            <div><label class="block text-sm font-medium mb-1">ชื่อผู้ใช้</label><input type="text" id="t_user" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                            <div><label class="block text-sm font-medium mb-1">รหัสผ่าน</label><input type="text" id="t_pass" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                            
+                            <div class="sm:col-span-2 mt-4 flex justify-end space-x-2 border-t pt-4">
+                                <button type="button" onclick="closeTeacherModal()" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">ยกเลิก</button>
+                                <button type="submit" id="t_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึก</button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
             `;
 
@@ -529,14 +543,39 @@
                     'รหัสผ่าน': document.getElementById('t_pass').value
                 };
                 
-                let res = await callAPI('saveData', { sheetName: 'ข้อมูลครู', rowId: rowId !== "" ? parseInt(rowId) : null, data: data });
+                closeTeacherModal();
+                showLoading(true);
+                let res = await callAPI('saveData', { sheetName: 'ข้อมูลครู', rowId: rowId !== "" ? parseInt(rowId) : null, data: data }, true);
                 if(res) { 
                     await getCachedData('ข้อมูลครู', true); 
+                    showLoading(false);
                     Swal.fire('สำเร็จ', 'บันทึกข้อมูลแล้ว', 'success'); 
                     loadPage('teachers'); 
+                } else {
+                    showLoading(false);
                 }
             };
         }
+
+        window.openTeacherModal = () => {
+            document.getElementById('teacherForm').reset();
+            document.getElementById('t_id').value = '';
+            document.getElementById('teacherModalTitle').innerText = 'เพิ่มข้อมูลครู';
+            document.getElementById('teacherModal').classList.remove('hidden');
+        };
+
+        window.closeTeacherModal = () => {
+            document.getElementById('teacherModal').classList.add('hidden');
+        };
+
+        window.refreshTeacherTable = async () => {
+            showLoading(true);
+            let newTeachers = await getCachedData('ข้อมูลครู', true);
+            window.teacherDataList = newTeachers;
+            window.filterTeacherTable();
+            showLoading(false);
+            Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลครูจากระบบแล้ว', timer: 1500, showConfirmButton: false});
+        };
 
         window.editTeacher = (data, idx) => {
             document.getElementById('t_id').value = idx;
@@ -546,18 +585,8 @@
             document.getElementById('t_user').value = data['ชื่อผู้ใช้'];
             document.getElementById('t_pass').value = data['รหัสผ่าน'];
             
-            document.getElementById('t_btn_save').innerText = 'ยืนยันแก้ไข';
-            document.getElementById('t_btn_save').classList.replace('bg-navy', 'bg-gold');
-            document.getElementById('t_btn_save').classList.replace('text-white', 'text-navy');
-            document.getElementById('t_btn_cancel').classList.remove('hidden');
-        }
-
-        window.resetTeacherForm = () => {
-            document.getElementById('teacherForm').reset();
-            document.getElementById('t_id').value = '';
-            document.getElementById('t_btn_save').innerText = 'บันทึก';
-            document.getElementById('t_btn_save').className = 'bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 w-full';
-            document.getElementById('t_btn_cancel').classList.add('hidden');
+            document.getElementById('teacherModalTitle').innerText = 'แก้ไขข้อมูลครู';
+            document.getElementById('teacherModal').classList.remove('hidden');
         }
 
         window.filterTeacherTable = () => {
@@ -593,68 +622,17 @@
             let teacherOptions = teachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
 
             container.innerHTML = `
-                <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-                    <h3 class="text-lg font-bold text-navy mb-4"><i class="fas fa-plus-circle text-gold mr-2"></i>ฟอร์มข้อมูลรายวิชา</h3>
-                    <form id="courseForm" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <input type="hidden" id="c_id">
-                        <div><label>รหัสวิชา</label><input type="text" id="c_code" required class="w-full border rounded p-2"></div>
-                        <div><label>ชื่อวิชา</label><input type="text" id="c_name" required class="w-full border rounded p-2"></div>
-                        <div><label>หน่วยกิต</label><input type="number" step="0.5" id="c_credit" required class="w-full border rounded p-2"></div>
-                        <div><label>ชื่อครูผู้สอน</label><select id="c_teacher" required class="w-full border rounded p-2"><option value="">เลือก...</option>${teacherOptions}</select></div>
-                        <div>
-                            <label>ชั้นที่เปิดสอน <span class="text-xs text-gray-500">(เลือกและกดเพิ่ม)</span></label>
-                            <div class="flex gap-1 mb-1">
-                                <select id="c_grade_sel" class="border rounded p-1 text-xs flex-1">
-                                    ${[1,2,3,4,5,6].map(i => `<option value="${i}">ม.${i}</option>`).join('')}
-                                </select>
-                                <select id="c_room_sel" class="border rounded p-1 text-xs flex-1">
-                                    ${Array.from({length:10},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join('')}
-                                </select>
-                                <button type="button" onclick="addCourseLevel()" class="bg-green-600 text-white px-2 py-1 rounded" title="เพิ่ม"><i class="fas fa-plus"></i></button>
-                                <button type="button" onclick="clearCourseLevel()" class="bg-red-500 text-white px-2 py-1 rounded" title="ล้าง"><i class="fas fa-trash"></i></button>
-                            </div>
-                            <input type="text" id="c_level" required class="w-full border rounded p-2 text-sm" placeholder="ม.1/1, ม.1/2">
-                        </div>
-                        <div>
-                            <label>แผนการเรียน <span class="text-xs text-gray-500">(เลือกและกดเพิ่ม)</span></label>
-                            <div class="flex gap-1 mb-1">
-                                <select id="c_plan_sel" class="border rounded p-1 text-xs flex-1">
-                                    <option value="">-- เลือก --</option>
-                                    ${planOptions}
-                                </select>
-                                <button type="button" onclick="addCoursePlan()" class="bg-green-600 text-white px-2 py-1 rounded" title="เพิ่ม"><i class="fas fa-plus"></i></button>
-                                <button type="button" onclick="clearCoursePlan()" class="bg-red-500 text-white px-2 py-1 rounded" title="ล้าง"><i class="fas fa-trash"></i></button>
-                            </div>
-                            <input type="text" id="c_plan" required class="w-full border rounded p-2 text-sm" placeholder="วิทย์-คณิต, ทั่วไป...">
-                        </div>
-                        <div><label>ภาคเรียนที่</label><select id="c_term" required class="w-full border rounded p-2"><option value="1">1</option><option value="2">2</option></select></div>
-                        <div><label>กลุ่มสาระ</label><select id="c_group" required class="w-full border rounded p-2"><option value="">เลือก...</option>${groupOptions}</select></div>
-                        <div class="flex items-end space-x-2 md:col-span-3 lg:col-span-1">
-                            <button type="submit" id="c_btn_save" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 w-full">บันทึก</button>
-                            <button type="button" id="c_btn_cancel" class="bg-gray-400 text-white px-4 py-2 rounded hidden w-full" onclick="resetCourseForm()">ยกเลิก</button>
-                        </div>
-                    </form>
-                    <div class="mt-4 border-t pt-4 flex flex-wrap gap-2 items-center">
-                        <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
-                        
-                        <button type="button" onclick="downloadCSVTemplate()" class="bg-yellow-600 text-white px-4 py-2 rounded text-sm hover:bg-yellow-700 shadow-sm transition">
-                            <i class="fas fa-download mr-1"></i> โหลดฟอร์ม CSV
-                        </button>
-                        
-                        <button type="button" onclick="document.getElementById('csvFileInput').click()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 shadow-sm transition">
-                            <i class="fas fa-file-import mr-1"></i> นำเข้าข้อมูล CSV
-                        </button>
-
-                        <button type="button" onclick="printCourseReport()" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 shadow-sm transition ml-auto">
-                            <i class="fas fa-file-pdf mr-1"></i> พิมพ์รายงาน PDF
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto">
-                    <div class="mb-4 flex justify-between items-center">
+                <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative mb-6">
+                    <div class="mb-4 flex justify-between items-center flex-wrap gap-2">
                         <h3 class="text-lg font-bold text-navy">ตารางข้อมูลรายวิชา</h3>
-                        <div class="flex space-x-2">
-                            <select id="filter_c_grade" class="border rounded p-1 text-sm" onchange="filterCourseTable()">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <button onclick="openCourseModal()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 text-sm shadow transition hover:-translate-y-0.5"><i class="fas fa-plus mr-1"></i> เพิ่มรายวิชา</button>
+                            <button type="button" onclick="document.getElementById('csvFileInput').click()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 shadow transition hover:-translate-y-0.5">
+                                <i class="fas fa-file-import mr-1"></i> นำเข้า CSV
+                            </button>
+                            <button onclick="refreshCourseTable()" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-2 rounded text-sm transition" title="ดึงข้อมูลล่าสุด"><i class="fas fa-sync-alt"></i></button>
+                            
+                            <select id="filter_c_grade" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
                                 <option value="all">ทุกระดับชั้น</option>
                                 <option value="ม.1">ม.1</option>
                                 <option value="ม.2">ม.2</option>
@@ -663,17 +641,95 @@
                                 <option value="ม.5">ม.5</option>
                                 <option value="ม.6">ม.6</option>
                             </select>
-                            <select id="filter_c_group" class="border rounded p-1 text-sm" onchange="filterCourseTable()">
+                            <select id="filter_c_group" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
                                 <option value="all">ทุกกลุ่มสาระ</option>${groupOptions}
                             </select>
                         </div>
                     </div>
+                    
+                    <div class="mb-4 flex flex-wrap gap-2 items-center text-sm text-gray-500">
+                        <input type="file" id="csvFileInput" accept=".csv" class="hidden" onchange="handleCSVUpload(event)">
+                        <a href="javascript:void(0)" onclick="downloadCSVTemplate()" class="hover:text-gold underline"><i class="fas fa-download mr-1"></i> โหลดฟอร์ม CSV</a>
+                        <span class="mx-2">|</span>
+                        <a href="javascript:void(0)" onclick="printCourseReport()" class="hover:text-blue-600 underline"><i class="fas fa-file-pdf mr-1"></i> พิมพ์รายงาน PDF</a>
+                    </div>
+
                     <table class="w-full text-xs text-left border-collapse" id="courseTable">
                         <thead class="bg-navy text-white">
                             <tr><th class="p-2 border">รหัส</th><th class="p-2 border">ชื่อวิชา</th><th class="p-2 border">กิต</th><th class="p-2 border">ครู</th><th class="p-2 border">ชั้น</th><th class="p-2 border">แผน</th><th class="p-2 border">กลุ่มสาระ</th><th class="p-2 border text-center">จัดการ</th></tr>
                         </thead>
                         <tbody></tbody>
                     </table>
+                </div>
+
+                <!-- ป๊อปอัพฟอร์มข้อมูลรายวิชา -->
+                <div id="courseModal" class="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center hidden">
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden transform transition-all max-h-[90vh] flex flex-col">
+                        <div class="bg-navy text-white px-6 py-4 flex justify-between items-center shrink-0">
+                            <h3 class="font-bold text-lg" id="courseModalTitle">เพิ่มข้อมูลรายวิชา</h3>
+                            <button onclick="closeCourseModal()" class="text-gray-300 hover:text-white focus:outline-none">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 overflow-y-auto">
+                            <form id="courseForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <input type="hidden" id="c_id">
+                                <!-- แถวที่ 1 -->
+                                <div><label class="block font-medium mb-1">รหัสวิชา</label><input type="text" id="c_code" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                <div><label class="block font-medium mb-1">ชื่อวิชา</label><input type="text" id="c_name" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                <!-- แถวที่ 2 -->
+                                <div><label class="block font-medium mb-1">หน่วยกิต</label><input type="number" step="0.5" id="c_credit" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                <div><label class="block font-medium mb-1">ชื่อครูผู้สอน</label><select id="c_teacher" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptions}</select></div>
+                                <!-- แถวที่ 3 -->
+                                <div><label class="block font-medium mb-1">ภาคเรียนที่</label><select id="c_term" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="1">1</option><option value="2">2</option></select></div>
+                                <div><label class="block font-medium mb-1">กลุ่มสาระ</label><select id="c_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${groupOptions}</select></div>
+                                
+                                <!-- แถวที่ 4 (เต็มความกว้าง) -->
+                                <div class="md:col-span-2 bg-gray-50 p-4 rounded border border-gray-200">
+                                    <label class="block font-medium mb-2">ชั้นที่เปิดสอน <span class="text-xs text-gray-500 font-normal">(เลือกระดับชั้น ติ๊กห้องที่ต้องการ แล้วกดเพิ่ม)</span></label>
+                                    <div class="flex flex-col gap-3 mb-3">
+                                        <div class="flex items-center gap-2 flex-wrap">
+                                            <span class="font-medium text-gray-700">ระดับชั้น:</span>
+                                            <select id="c_grade_sel" class="border border-gray-300 rounded p-1.5 text-sm focus:border-gold outline-none w-24">
+                                                ${[1,2,3,4,5,6].map(i => `<option value="${i}">ม.${i}</option>`).join('')}
+                                            </select>
+                                            <button type="button" onclick="addCourseLevel()" class="bg-green-600 text-white px-3 py-1.5 rounded hover:bg-green-700 shadow-sm ml-auto text-sm whitespace-nowrap" title="เพิ่ม"><i class="fas fa-plus"></i> เพิ่มที่เลือก</button>
+                                            <button type="button" onclick="clearCourseLevel()" class="bg-red-500 text-white px-3 py-1.5 rounded hover:bg-red-600 shadow-sm text-sm whitespace-nowrap" title="ล้าง"><i class="fas fa-trash"></i> ล้างข้อมูล</button>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2 items-center p-2 bg-white border border-gray-300 rounded">
+                                            <span class="text-sm font-medium text-gray-600 mr-1">ห้อง:</span>
+                                            ${Array.from({length:12},(_,i)=>`
+                                                <label class="flex items-center space-x-1 cursor-pointer bg-gray-100 px-2 py-1 rounded hover:bg-gray-200 transition border border-transparent hover:border-gray-300">
+                                                    <input type="checkbox" value="${i+1}" class="room-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                                                    <span class="text-sm text-navy">/${i+1}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
+                                    <input type="text" id="c_level" required class="w-full border border-gray-300 rounded p-2 text-sm focus:border-gold outline-none" placeholder="เช่น ม.1/1, ม.1/2">
+                                </div>
+
+                                <!-- แถวที่ 5 (เต็มความกว้าง) -->
+                                <div class="md:col-span-2 bg-gray-50 p-4 rounded border border-gray-200">
+                                    <label class="block font-medium mb-2">แผนการเรียน <span class="text-xs text-gray-500 font-normal">(เลือกแล้วกดเพิ่ม หรือพิมพ์เองโดยคั่นด้วยลูกน้ำ)</span></label>
+                                    <div class="flex gap-2 mb-2">
+                                        <select id="c_plan_sel" class="border border-gray-300 rounded p-2 text-sm flex-1 focus:border-gold outline-none">
+                                            <option value="">-- เลือกแผนการเรียน --</option>
+                                            ${planOptions}
+                                        </select>
+                                        <button type="button" onclick="addCoursePlan()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm whitespace-nowrap" title="เพิ่ม"><i class="fas fa-plus"></i> เพิ่ม</button>
+                                        <button type="button" onclick="clearCoursePlan()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow-sm whitespace-nowrap" title="ล้าง"><i class="fas fa-trash"></i></button>
+                                    </div>
+                                    <input type="text" id="c_plan" required class="w-full border border-gray-300 rounded p-2 text-sm focus:border-gold outline-none" placeholder="เช่น วิทย์-คณิต, ทั่วไป">
+                                </div>
+                                
+                                <div class="md:col-span-2 mt-4 flex justify-end space-x-2 border-t pt-4">
+                                    <button type="button" onclick="closeCourseModal()" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">ยกเลิก</button>
+                                    <button type="submit" id="c_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึก</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
             `;
 
@@ -695,23 +751,57 @@
             };
             window.renderCourseRows(courses);
 
+            window.openCourseModal = () => {
+                document.getElementById('courseForm').reset();
+                document.getElementById('c_id').value = '';
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); // เคลียร์ Checkbox
+                document.getElementById('courseModalTitle').innerText = 'เพิ่มข้อมูลรายวิชา';
+                document.getElementById('courseModal').classList.remove('hidden');
+            };
+
+            window.closeCourseModal = () => {
+                document.getElementById('courseModal').classList.add('hidden');
+            };
+
+            window.refreshCourseTable = async () => {
+                showLoading(true);
+                let newCourses = await getCachedData('ข้อมูลรายวิชา', true);
+                window.courseDataList = newCourses;
+                window.filterCourseTable();
+                showLoading(false);
+                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลรายวิชาจากระบบแล้ว', timer: 1500, showConfirmButton: false});
+            };
+
             window.addCourseLevel = () => {
                 const grade = document.getElementById('c_grade_sel').value;
-                const count = parseInt(document.getElementById('c_room_sel').value);
-                let newRooms = [];
-                for (let i = 1; i <= count; i++) {
-                    newRooms.push(`ม.${grade}/${i}`);
+                const checkboxes = document.querySelectorAll('.room-chk:checked');
+                
+                if(checkboxes.length === 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกห้องอย่างน้อย 1 ห้อง', 'warning');
+                    return;
                 }
+                
+                let newRooms = [];
+                checkboxes.forEach(chk => {
+                    newRooms.push(`ม.${grade}/${chk.value}`);
+                });
+
                 const input = document.getElementById('c_level');
                 let currentRooms = input.value.split(',').map(r => r.trim()).filter(r => r);
+                
                 newRooms.forEach(r => {
                     if(!currentRooms.includes(r)) currentRooms.push(r);
                 });
-                input.value = currentRooms.join(',');
+                
+                input.value = currentRooms.join(', ');
+                
+                // เอาเครื่องหมายติ๊กถูกออกหลังจากกดเพิ่มแล้ว
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false);
             };
 
             window.clearCourseLevel = () => {
                 document.getElementById('c_level').value = '';
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false);
             };
 
             window.addCoursePlan = () => {
@@ -722,7 +812,7 @@
                 if(!currentPlans.includes(plan)) {
                     currentPlans.push(plan);
                 }
-                input.value = currentPlans.join(',');
+                input.value = currentPlans.join(', ');
                 document.getElementById('c_plan_sel').value = '';
             };
 
@@ -739,11 +829,17 @@
                     'ชั้นที่เปิดสอน': document.getElementById('c_level').value, 'แผนการเรียน': document.getElementById('c_plan').value,
                     'ภาคเรียนที่': document.getElementById('c_term').value, 'กลุ่มสาระการเรียนรู้': document.getElementById('c_group').value
                 };
-                let res = await callAPI('saveData', { sheetName: 'ข้อมูลรายวิชา', rowId: rowId !== "" ? parseInt(rowId) : null, data: data });
+                
+                closeCourseModal();
+                showLoading(true);
+                let res = await callAPI('saveData', { sheetName: 'ข้อมูลรายวิชา', rowId: rowId !== "" ? parseInt(rowId) : null, data: data }, true);
                 if(res) { 
                     await getCachedData('ข้อมูลรายวิชา', true); 
+                    showLoading(false);
                     Swal.fire('สำเร็จ', 'บันทึกข้อมูลแล้ว', 'success'); 
                     loadPage('courses'); 
+                } else {
+                    showLoading(false);
                 }
             };
 
@@ -752,11 +848,10 @@
                 ['c_code','c_name','c_credit','c_teacher','c_level','c_plan','c_term','c_group'].forEach((id, i) => {
                     document.getElementById(id).value = data[Object.keys(data)[i]] || '';
                 });
-                document.getElementById('c_btn_save').innerText = 'ยืนยันแก้ไข';
-                document.getElementById('c_btn_cancel').classList.remove('hidden');
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); // เคลียร์ Checkbox
+                document.getElementById('courseModalTitle').innerText = 'แก้ไขข้อมูลรายวิชา';
+                document.getElementById('courseModal').classList.remove('hidden');
             }
-
-            window.resetCourseForm = () => { document.getElementById('courseForm').reset(); document.getElementById('c_id').value = ''; document.getElementById('c_btn_save').innerText = 'บันทึก'; document.getElementById('c_btn_cancel').classList.add('hidden'); }
             
             window.filterCourseTable = () => {
                 const filterGroup = document.getElementById('filter_c_group').value;
@@ -924,7 +1019,7 @@
                             .logo { position: absolute; left: 0; top: -10px; width: 80px; height: 80px; object-fit: contain; }
                             h2 { margin: 0 0 5px 0; color: #0f172a; font-size: 20px; }
                             p { margin: 0; color: #475569; }
-                            table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                            table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 16pt; }
                             th { border: 1px solid #94a3b8; padding: 10px; background-color: #f1f5f9; color: #0f172a; }
                             tr:nth-child(even) { background-color: #f8fafc; }
                             
@@ -1087,28 +1182,49 @@
                         <div>
                             <h4 class="font-bold text-navy border-b pb-1 mb-3">ตั้งค่าแผนการเรียนและชั้น/ห้องที่สังกัด</h4>
                             
-                            <!-- ตัวเลือก Datalist สำหรับพิมพ์หรือเลือก -->
                             <datalist id="dl_learning_plans">${planOptionsHtml}</datalist>
-                            <datalist id="dl_setting_rooms">${roomOptionsHtml}</datalist>
 
-                            <div class="flex flex-wrap items-end gap-2 mb-2">
-                                <div class="flex-1">
-                                    <label class="text-xs text-gray-600 block">ชื่อแผนการเรียน (เช่น วิทย์-คณิต)</label>
-                                    <input type="text" id="s_learning_plan_input" list="dl_learning_plans" class="border rounded p-2 w-full focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์ชื่อแผน...">
+                            <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-3">
+                                <div class="mb-3">
+                                    <label class="text-sm font-medium text-gray-700 block mb-1">ชื่อแผนการเรียน (เช่น วิทย์-คณิต)</label>
+                                    <input type="text" id="s_learning_plan_input" list="dl_learning_plans" class="border border-gray-300 rounded p-2 w-full focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์ชื่อแผน...">
                                 </div>
-                                <div class="flex-1">
-                                    <label class="text-xs text-gray-600 block">ระบุชั้น/ห้อง (เช่น ม.4/1, ม.4/2)</label>
-                                    <input type="text" id="s_learning_plan_rooms_input" list="dl_setting_rooms" class="border rounded p-2 w-full focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์ห้อง (คั่นด้วยลูกน้ำ)...">
+                                
+                                <div class="mb-3">
+                                    <label class="text-sm font-medium text-gray-700 block mb-2">ระบุชั้นและห้องที่สังกัดแผนนี้ <span class="text-xs text-gray-500 font-normal">(ติ๊กเลือกระดับชั้นและห้องได้หลายรายการ ระบบจะจับคู่ให้)</span></label>
+                                    <div class="flex flex-col gap-2">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-sm font-medium text-gray-600 w-16">ระดับชั้น:</span>
+                                            ${[1,2,3,4,5,6].map(i => `
+                                                <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                                                    <input type="checkbox" value="${i}" class="plan-grade-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                                                    <span class="text-sm text-navy">ม.${i}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="text-sm font-medium text-gray-600 w-16">ห้อง:</span>
+                                            ${Array.from({length:12},(_,i)=>`
+                                                <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                                                    <input type="checkbox" value="${i+1}" class="plan-room-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                                                    <span class="text-sm text-navy">/${i+1}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
+                                    </div>
                                 </div>
-                                <button type="button" onclick="addLearningPlan()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 h-[38px] flex items-center">
-                                    <i class="fas fa-plus mr-1"></i> เพิ่ม
-                                </button>
-                                <button type="button" onclick="clearLearningPlans()" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 h-[38px] flex items-center">
-                                    <i class="fas fa-trash mr-1"></i> ล้าง
-                                </button>
+                                
+                                <div class="flex gap-2">
+                                    <button type="button" onclick="addLearningPlan()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 h-[38px] flex items-center text-sm shadow-sm">
+                                        <i class="fas fa-plus mr-1"></i> เพิ่มลงรายการ
+                                    </button>
+                                    <button type="button" onclick="clearLearningPlans()" class="bg-red-500 text-white px-3 py-2 rounded hover:bg-red-600 h-[38px] flex items-center text-sm shadow-sm ml-auto">
+                                        <i class="fas fa-trash mr-1"></i> ล้างรายการทั้งหมด
+                                    </button>
+                                </div>
                             </div>
-                            <textarea id="s_learning_plans" rows="4" class="w-full border rounded p-2" placeholder="วิทย์-คณิต : ม.4/1, ม.4/2\nทั่วไป : ม.4/3, ม.4/4">${settings.learning_plans || learningPlans.join(',')}</textarea>
-                            <p class="text-xs text-gray-500 mt-1">*รูปแบบ: <b>ชื่อแผน : ห้อง1, ห้อง2</b> (ขึ้นบรรทัดใหม่สำหรับแผนถัดไป)</p>
+                            <textarea id="s_learning_plans" rows="4" class="w-full border border-gray-300 rounded p-2 text-sm focus:border-gold outline-none" placeholder="วิทย์-คณิต : ม.4/1, ม.4/2\nทั่วไป : ม.4/3, ม.4/4">${settings.learning_plans || learningPlans.join(',')}</textarea>
+                            <p class="text-xs text-gray-500 mt-1">*สามารถพิมพ์แก้ไขในกล่องข้อความนี้ได้โดยตรง รูปแบบ: <b>ชื่อแผน : ห้อง1, ห้อง2</b> (ขึ้นบรรทัดใหม่สำหรับแผนถัดไป)</p>
                         </div>
 
                         <!-- การตั้งค่าชื่อสถานที่/ห้องที่ใช้เรียน -->
@@ -1220,11 +1336,37 @@
 
             window.addLearningPlan = () => {
                 const planName = document.getElementById('s_learning_plan_input').value.trim();
-                const planRooms = document.getElementById('s_learning_plan_rooms_input').value.trim();
-                if (!planName) return;
+                
+                if (!planName) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาระบุชื่อแผนการเรียน', 'warning');
+                    return;
+                }
+
+                const gradeChks = document.querySelectorAll('.plan-grade-chk:checked');
+                const roomChks = document.querySelectorAll('.plan-room-chk:checked');
+                
+                if (gradeChks.length === 0 && roomChks.length > 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้นด้วย', 'warning');
+                    return;
+                }
+
+                let roomsArr = [];
+                if (gradeChks.length > 0 && roomChks.length === 0) {
+                    // เลือกระดับชั้น แต่ไม่เลือกห้อง
+                    gradeChks.forEach(g => roomsArr.push(`ม.${g.value}`));
+                } else {
+                    // จับคู่ชั้นกับห้องที่เลือก
+                    gradeChks.forEach(g => {
+                        roomChks.forEach(r => {
+                            roomsArr.push(`ม.${g.value}/${r.value}`);
+                        });
+                    });
+                }
+
+                let planRoomsStr = roomsArr.join(', ');
 
                 const textarea = document.getElementById('s_learning_plans');
-                let newEntry = planName + (planRooms ? ' : ' + planRooms : '');
+                let newEntry = planName + (planRoomsStr ? ' : ' + planRoomsStr : '');
 
                 if (textarea.value.trim() === '') {
                     textarea.value = newEntry;
@@ -1232,8 +1374,10 @@
                     textarea.value += '\n' + newEntry;
                 }
 
+                // รีเซ็ตช่องกรอกและ Checkbox
                 document.getElementById('s_learning_plan_input').value = '';
-                document.getElementById('s_learning_plan_rooms_input').value = '';
+                document.querySelectorAll('.plan-grade-chk').forEach(c => c.checked = false);
+                document.querySelectorAll('.plan-room-chk').forEach(c => c.checked = false);
             };
 
             window.clearLearningPlans = () => {
@@ -1320,85 +1464,18 @@
             window.scheduleBaseData = dataList.map((d, index) => ({...d, originalIndex: index}));
             window.pendingSchBaseSync = 0;
 
-            let tabHtml = '';
-            if (isLockMode) {
-                tabHtml = `
-                    <div class="flex border-b border-gray-200 mb-4">
-                        <button type="button" id="tab_lock_class" class="py-2 px-4 text-navy font-bold border-b-2 border-navy outline-none" onclick="switchLockTab('class')">ล๊อควิชาเรียน (ห้อง)</button>
-                        <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคกิจกรรม (ครู)</button>
-                    </div>
-                `;
-            }
-
             container.innerHTML = `
-                <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-                    <h3 class="text-lg font-bold text-navy mb-4"><i class="fas ${isLockMode ? 'fa-lock text-red-500' : 'fa-calendar-plus text-green-500'} mr-2"></i>ฟอร์ม${isLockMode ? 'ล๊อครายวิชาและกิจกรรม' : 'จัดลงตาราง'}</h3>
-                    ${tabHtml}
-                    
-                    <!-- ฟอร์มที่ 1: ล๊อควิชาเรียน (ปกติ) -->
-                    <form id="schForm" class="flex flex-col gap-4 text-sm bg-gray-50 p-5 rounded-lg border border-gray-200">
-                        <input type="hidden" id="sch_id">
-                        
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                            <div><label class="block text-gray-700 font-medium mb-1">ระดับชั้น/ห้อง</label><select id="sch_room" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${roomOptions}</select></div>
-                            <div><label class="block text-gray-700 font-medium mb-1">แผนการเรียน</label><select id="sch_plan" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${planOptions}</select></div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                            <div><label class="block text-gray-700 font-medium mb-1">วัน</label><select id="sch_day" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${dayOptions}</select></div>
-                            <div><label class="block text-gray-700 font-medium mb-1">คาบที่</label><select id="sch_period" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${periodOptions}</select></div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                            <div>
-                                <label class="block text-gray-700 font-medium mb-1">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*ระบุข้อมูลด้านบนก่อน</span></label>
-                                <select id="sch_code" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="autoFillCourse()">
-                                    <option value="">-- เลือกรหัสวิชา --</option>
-                                </select>
-                            </div>
-                            <div><label class="block text-gray-700 font-medium mb-1">ชื่อวิชา (อัตโนมัติ)</label><input type="text" id="sch_name" readonly class="w-full border rounded p-2 bg-gray-200 text-gray-600 cursor-not-allowed"></div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                            <div><label class="block text-gray-700 font-medium mb-1">ครูผู้สอน (อัตโนมัติ)</label><input type="text" id="sch_teacher" readonly class="w-full border rounded p-2 bg-gray-200 text-gray-600 cursor-not-allowed"></div>
-                            <div>
-                                <label class="block text-gray-700 font-medium mb-1">สถานที่เรียน <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะห้องว่าง</span></label>
-                                <select id="sch_location" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
-                                    <option value="">-- ไม่ระบุ --</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="flex items-end space-x-2 mt-2 justify-end border-t border-gray-300 pt-4">
-                            <button type="button" id="sch_btn_cancel" class="bg-gray-400 text-white px-6 py-2 rounded hidden hover:bg-gray-500 transition shadow-sm" onclick="resetSchForm()">ยกเลิก</button>
-                            <button type="submit" id="sch_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึก</button>
-                        </div>
-                    </form>
-
-                    <!-- ฟอร์มที่ 2: ล๊อคกิจกรรมครู (ซ่อนไว้ก่อน) -->
-                    <form id="schTeacherForm" class="flex flex-col gap-4 text-sm bg-gray-50 p-5 rounded-lg border border-gray-200 hidden">
-                        <input type="hidden" id="t_sch_id">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                            <div><label class="block text-gray-700 font-medium mb-1">วัน</label><select id="t_sch_day" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${dayOptions}</select></div>
-                            <div><label class="block text-gray-700 font-medium mb-1">คาบที่</label><select id="t_sch_period" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${periodOptions}</select></div>
-                        </div>
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                            <div><label class="block text-gray-700 font-medium mb-1">ชื่อครู</label><select id="t_sch_teacher" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptsHtml}</select></div>
-                            <div>
-                                <label class="block text-gray-700 font-medium mb-1">กิจกรรม</label>
-                                <input type="text" id="t_sch_activity" required list="dl_activities" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์กิจกรรม...">
-                                <datalist id="dl_activities">${activityOptionsHtml}</datalist>
-                            </div>
-                        </div>
-                        <div class="flex items-end space-x-2 mt-2 justify-end border-t border-gray-300 pt-4">
-                            <button type="button" id="t_sch_btn_cancel" class="bg-gray-400 text-white px-6 py-2 rounded hidden hover:bg-gray-500 transition shadow-sm" onclick="resetTeacherSchForm()">ยกเลิก</button>
-                            <button type="submit" id="t_sch_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึกกิจกรรม</button>
-                        </div>
-                    </form>
-                </div>
-                
-                <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto">
+                <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative mb-6">
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-lg font-bold text-navy">รายการที่จัดลงตารางแล้ว</h3>
-                        <div id="schBaseSyncStatus" class="text-sm font-medium text-green-600 transition-all duration-300">
-                            <i class="fas fa-check-circle text-green-500"></i> ข้อมูลบันทึกแล้ว
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-lg font-bold text-navy">รายการที่จัดลงตารางแล้ว</h3>
+                            <button onclick="refreshSchBaseTable()" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1 rounded text-sm transition" title="ดึงข้อมูลล่าสุด"><i class="fas fa-sync-alt mr-1"></i>รีเฟรช</button>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <div id="schBaseSyncStatus" class="text-sm font-medium text-green-600 transition-all duration-300">
+                                <i class="fas fa-check-circle text-green-500"></i> ข้อมูลบันทึกแล้ว
+                            </div>
+                            <button onclick="openSchBaseModal()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 text-sm shadow transition hover:-translate-y-0.5"><i class="fas fa-plus mr-1"></i> เพิ่มรายการ</button>
                         </div>
                     </div>
                     <table class="w-full text-sm text-left border-collapse">
@@ -1408,30 +1485,143 @@
                         <tbody id="schTbody"></tbody>
                     </table>
                 </div>
+
+                <!-- ป๊อปอัพฟอร์มล๊อครายวิชาและกิจกรรม -->
+                <div id="schBaseModal" class="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center hidden">
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden transform transition-all flex flex-col max-h-[90vh]">
+                        <div class="bg-navy text-white px-6 py-4 flex justify-between items-center shrink-0">
+                            <h3 class="font-bold text-lg" id="schBaseModalTitle">จัดการรายการ</h3>
+                            <button onclick="closeSchBaseModal()" class="text-gray-300 hover:text-white focus:outline-none">
+                                <i class="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="p-6 overflow-y-auto">
+                            ${isLockMode ? `
+                            <div class="flex border-b border-gray-200 mb-6">
+                                <button type="button" id="tab_lock_class" class="py-2 px-4 text-navy font-bold border-b-2 border-navy outline-none" onclick="switchLockTab('class')">ล๊อควิชาเรียน (ห้อง)</button>
+                                <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคกิจกรรม (ครู)</button>
+                            </div>
+                            ` : ''}
+                            
+                            <!-- ฟอร์มที่ 1: ล๊อควิชาเรียน (ปกติ) -->
+                            <form id="schForm" class="flex flex-col gap-4 text-sm">
+                                <input type="hidden" id="sch_id">
+                                
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div><label class="block text-gray-700 font-medium mb-1">ระดับชั้น/ห้อง</label><select id="sch_room" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${roomOptions}</select></div>
+                                    <div><label class="block text-gray-700 font-medium mb-1">แผนการเรียน</label><select id="sch_plan" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${planOptions}</select></div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div><label class="block text-gray-700 font-medium mb-1">วัน</label><select id="sch_day" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${dayOptions}</select></div>
+                                    <div><label class="block text-gray-700 font-medium mb-1">คาบที่</label><select id="sch_period" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${periodOptions}</select></div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*ระบุข้อมูลด้านบนก่อน</span></label>
+                                        <select id="sch_code" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="autoFillCourse()">
+                                            <option value="">-- เลือกรหัสวิชา --</option>
+                                        </select>
+                                    </div>
+                                    <div><label class="block text-gray-700 font-medium mb-1">ชื่อวิชา (อัตโนมัติ)</label><input type="text" id="sch_name" readonly class="w-full border rounded p-2 bg-gray-100 text-gray-600 cursor-not-allowed"></div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div><label class="block text-gray-700 font-medium mb-1">ครูผู้สอน (อัตโนมัติ)</label><input type="text" id="sch_teacher" readonly class="w-full border rounded p-2 bg-gray-100 text-gray-600 cursor-not-allowed"></div>
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">สถานที่เรียน <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะห้องว่าง</span></label>
+                                        <select id="sch_location" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
+                                            <option value="">-- ไม่ระบุ --</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center mt-6 pt-4 border-t border-gray-200">
+                                    <button type="button" id="sch_btn_delete_modal" class="text-red-500 hover:text-red-700 font-medium px-4 py-2 hidden" onclick="deleteFromModal('class')">
+                                        <i class="fas fa-trash mr-1"></i> ลบข้อมูล
+                                    </button>
+                                    <div class="ml-auto flex space-x-2">
+                                        <button type="button" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition" onclick="closeSchBaseModal()">ยกเลิก</button>
+                                        <button type="submit" id="sch_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึก</button>
+                                    </div>
+                                </div>
+                            </form>
+
+                            <!-- ฟอร์มที่ 2: ล๊อคกิจกรรมครู (ซ่อนไว้ก่อน) -->
+                            <form id="schTeacherForm" class="flex-col gap-4 text-sm hidden">
+                                <input type="hidden" id="t_sch_id">
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div><label class="block text-gray-700 font-medium mb-1">วัน</label><select id="t_sch_day" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${dayOptions}</select></div>
+                                    <div><label class="block text-gray-700 font-medium mb-1">คาบที่</label><select id="t_sch_period" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${periodOptions}</select></div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div><label class="block text-gray-700 font-medium mb-1">ชื่อครู</label><select id="t_sch_teacher" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptsHtml}</select></div>
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">กิจกรรม</label>
+                                        <input type="text" id="t_sch_activity" required list="dl_activities" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์กิจกรรม...">
+                                        <datalist id="dl_activities">${activityOptionsHtml}</datalist>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center mt-6 pt-4 border-t border-gray-200">
+                                    <button type="button" id="t_sch_btn_delete_modal" class="text-red-500 hover:text-red-700 font-medium px-4 py-2 hidden" onclick="deleteFromModal('teacher')">
+                                        <i class="fas fa-trash mr-1"></i> ลบข้อมูล
+                                    </button>
+                                    <div class="ml-auto flex space-x-2">
+                                        <button type="button" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition" onclick="closeSchBaseModal()">ยกเลิก</button>
+                                        <button type="submit" id="t_sch_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึกกิจกรรม</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
             `;
 
             window.switchLockTab = (tab) => {
                 if(tab === 'class') {
-                    document.getElementById('tab_lock_class').classList.add('text-navy', 'font-bold', 'border-b-2', 'border-navy');
-                    document.getElementById('tab_lock_class').classList.remove('text-gray-500');
-                    document.getElementById('tab_lock_teacher').classList.remove('text-navy', 'font-bold', 'border-b-2', 'border-navy');
-                    document.getElementById('tab_lock_teacher').classList.add('text-gray-500');
+                    if(document.getElementById('tab_lock_class')) {
+                        document.getElementById('tab_lock_class').classList.add('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                        document.getElementById('tab_lock_class').classList.remove('text-gray-500');
+                        document.getElementById('tab_lock_teacher').classList.remove('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                        document.getElementById('tab_lock_teacher').classList.add('text-gray-500');
+                    }
                     
                     document.getElementById('schForm').classList.remove('hidden');
                     document.getElementById('schForm').classList.add('flex');
                     document.getElementById('schTeacherForm').classList.add('hidden');
                     document.getElementById('schTeacherForm').classList.remove('flex');
                 } else {
-                    document.getElementById('tab_lock_teacher').classList.add('text-navy', 'font-bold', 'border-b-2', 'border-navy');
-                    document.getElementById('tab_lock_teacher').classList.remove('text-gray-500');
-                    document.getElementById('tab_lock_class').classList.remove('text-navy', 'font-bold', 'border-b-2', 'border-navy');
-                    document.getElementById('tab_lock_class').classList.add('text-gray-500');
+                    if(document.getElementById('tab_lock_teacher')) {
+                        document.getElementById('tab_lock_teacher').classList.add('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                        document.getElementById('tab_lock_teacher').classList.remove('text-gray-500');
+                        document.getElementById('tab_lock_class').classList.remove('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                        document.getElementById('tab_lock_class').classList.add('text-gray-500');
+                    }
                     
                     document.getElementById('schTeacherForm').classList.remove('hidden');
                     document.getElementById('schTeacherForm').classList.add('flex');
                     document.getElementById('schForm').classList.add('hidden');
                     document.getElementById('schForm').classList.remove('flex');
                 }
+            };
+
+            window.openSchBaseModal = () => {
+                window.resetSchForm();
+                window.resetTeacherSchForm();
+                document.getElementById('schBaseModalTitle').innerText = 'เพิ่มรายการใหม่';
+                
+                // ถ้าระบบมี tab ให้ซ่อนปุ่มลบ เปิด tab แรก
+                if(isLockMode) {
+                    window.switchLockTab('class');
+                    document.getElementById('tab_lock_class').classList.remove('hidden');
+                    document.getElementById('tab_lock_teacher').classList.remove('hidden');
+                }
+                
+                document.getElementById('schBaseModal').classList.remove('hidden');
+            };
+
+            window.closeSchBaseModal = () => {
+                document.getElementById('schBaseModal').classList.add('hidden');
             };
 
             window.courseLookup = courses;
@@ -1578,6 +1768,18 @@
             };
             window.renderSchRows(window.scheduleBaseData);
 
+            window.refreshSchBaseTable = async () => {
+                showLoading(true);
+                let newData = await getCachedData(sheetName, true);
+                window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index}));
+                window.renderSchRows(window.scheduleBaseData);
+                if(!isLockMode) {
+                    window.updateMainFormDropdowns();
+                }
+                showLoading(false);
+                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตรายการในตารางจากระบบแล้ว', timer: 1500, showConfirmButton: false});
+            };
+
             window.updateSchBaseSyncStatus = () => {
                 const statusEl = document.getElementById('schBaseSyncStatus');
                 if(!statusEl) return;
@@ -1646,7 +1848,7 @@
                 };
 
                 processSaveData(data, rowId);
-                window.resetSchForm(); 
+                window.closeSchBaseModal(); 
             };
 
             // การ Submit ของฟอร์มล๊อคกิจกรรมครู
@@ -1675,7 +1877,16 @@
                 }
 
                 processSaveData(data, rowId);
-                window.resetTeacherSchForm(); 
+                window.closeSchBaseModal(); 
+            };
+
+            // ฟังก์ชันลบที่ถูกเรียกจากใน Modal (สำหรับการแก้ไข)
+            window.deleteFromModal = (formType) => {
+                let idStr = formType === 'class' ? document.getElementById('sch_id').value : document.getElementById('t_sch_id').value;
+                if(idStr) {
+                    window.closeSchBaseModal();
+                    window.deleteSchBaseRow(sheetName, parseInt(idStr));
+                }
             };
 
             window.deleteSchBaseRow = async (targetSheetName, rowIndex) => {
@@ -1707,9 +1918,17 @@
             };
 
             window.editSch = (data, idx) => {
+                document.getElementById('schBaseModalTitle').innerText = 'แก้ไขรายการ';
+                
                 // ตรวจสอบว่าเป็นข้อมูลกิจกรรมครู หรือ ข้อมูลวิชาเรียนปกติ
                 if (data['รหัสวิชา'] === 'กิจกรรม' || data['ห้องเรียน'] === '-') {
-                    if(isLockMode) window.switchLockTab('teacher');
+                    if(isLockMode) {
+                        window.switchLockTab('teacher');
+                        // ซ่อนแท็บเพื่อไม่ให้สลับไปมาตอนแก้ไข
+                        document.getElementById('tab_lock_class').classList.add('hidden');
+                        document.getElementById('tab_lock_teacher').classList.add('hidden');
+                    }
+                    
                     document.getElementById('t_sch_id').value = idx;
                     document.getElementById('t_sch_day').value = data['วัน'] || '';
                     document.getElementById('t_sch_period').value = data['คาบที่'] || '';
@@ -1719,9 +1938,14 @@
                     document.getElementById('t_sch_btn_save').innerText = 'ยืนยันแก้ไข';
                     document.getElementById('t_sch_btn_save').classList.replace('bg-navy', 'bg-gold');
                     document.getElementById('t_sch_btn_save').classList.replace('text-white', 'text-navy');
-                    document.getElementById('t_sch_btn_cancel').classList.remove('hidden');
+                    document.getElementById('t_sch_btn_delete_modal').classList.remove('hidden');
                 } else {
-                    if(isLockMode) window.switchLockTab('class');
+                    if(isLockMode) {
+                        window.switchLockTab('class');
+                        document.getElementById('tab_lock_class').classList.add('hidden');
+                        document.getElementById('tab_lock_teacher').classList.add('hidden');
+                    }
+                    
                     document.getElementById('sch_id').value = idx;
                     document.getElementById('sch_room').value = data['ห้องเรียน'] || '';
                     document.getElementById('sch_plan').value = data['แผนการเรียน'] || '';
@@ -1739,8 +1963,9 @@
                     document.getElementById('sch_btn_save').innerText = 'ยืนยันแก้ไข';
                     document.getElementById('sch_btn_save').classList.replace('bg-navy', 'bg-gold');
                     document.getElementById('sch_btn_save').classList.replace('text-white', 'text-navy');
-                    document.getElementById('sch_btn_cancel').classList.remove('hidden');
+                    document.getElementById('sch_btn_delete_modal').classList.remove('hidden');
                 }
+                document.getElementById('schBaseModal').classList.remove('hidden');
             }
 
             window.resetSchForm = () => { 
@@ -1751,7 +1976,7 @@
                 document.getElementById('sch_btn_save').innerText = 'บันทึก'; 
                 document.getElementById('sch_btn_save').classList.replace('bg-gold', 'bg-navy');
                 document.getElementById('sch_btn_save').classList.replace('text-navy', 'text-white');
-                document.getElementById('sch_btn_cancel').classList.add('hidden'); 
+                document.getElementById('sch_btn_delete_modal').classList.add('hidden'); 
             }
 
             window.resetTeacherSchForm = () => { 
@@ -1761,7 +1986,7 @@
                     document.getElementById('t_sch_btn_save').innerText = 'บันทึกกิจกรรม'; 
                     document.getElementById('t_sch_btn_save').classList.replace('bg-gold', 'bg-navy');
                     document.getElementById('t_sch_btn_save').classList.replace('text-navy', 'text-white');
-                    document.getElementById('t_sch_btn_cancel').classList.add('hidden'); 
+                    document.getElementById('t_sch_btn_delete_modal').classList.add('hidden'); 
                 }
             }
         }
@@ -1845,6 +2070,9 @@
                         </div>
                         <button onclick="refreshSchGrid()" class="bg-navy text-white px-6 py-2 rounded hover:bg-opacity-90 transition shadow-sm h-[38px] flex items-center text-sm">
                             <i class="fas fa-search mr-2"></i> โหลดตาราง
+                        </button>
+                        <button onclick="forceRefreshSchGrid()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition shadow-sm h-[38px] flex items-center text-sm" title="ดึงข้อมูลล่าสุดจากระบบ">
+                            <i class="fas fa-sync-alt mr-2"></i> รีเฟรชข้อมูล
                         </button>
                     </div>
 
@@ -1936,6 +2164,24 @@
                 </div>
             `;
 
+            window.forceRefreshSchGrid = async () => {
+                showLoading(true);
+                let [newDataList, newCourses] = await Promise.all([
+                    getCachedData('กำหนดตารางสอน', true),
+                    getCachedData('ข้อมูลรายวิชา', true)
+                ]);
+                window.interactiveSchData = newDataList.map((d, index) => ({...d, originalIndex: index}));
+                window.interactiveCourses = newCourses;
+                
+                const room = document.getElementById('grid_room').value;
+                const plan = document.getElementById('grid_plan').value;
+                if (room && plan) {
+                    window.refreshSchGrid();
+                }
+                showLoading(false);
+                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'ดึงข้อมูลล่าสุดจากระบบแล้ว', timer: 1500, showConfirmButton: false});
+            };
+
             // อัปเดตสถานะ UI การบันทึก
             window.updateSyncStatus = () => {
                 const statusEl = document.getElementById('syncStatus');
@@ -1965,7 +2211,7 @@
                 const plan = document.getElementById('grid_plan').value;
 
                 if (!room || !plan) {
-                    Swal.fire('แจ้งเตือน', 'กรุณาเลือระดับชั้น/ห้อง และ แผนการเรียน ก่อน', 'warning');
+                    Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้อง และ แผนการเรียน ก่อน', 'warning');
                     return;
                 }
 
@@ -2622,6 +2868,7 @@
 
                     <button onclick="previewTimetable()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 h-[38px] flex items-center text-sm"><i class="fas fa-search mr-2"></i> แสดงตาราง</button>
                     <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-auto h-[38px] flex items-center text-sm"><i class="fas fa-download mr-2"></i> ดาวน์โหลด JPG</button>
+                    <button onclick="forceRefreshDownload()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 h-[38px] flex items-center text-sm" title="ดึงข้อมูลล่าสุดจากระบบ"><i class="fas fa-sync-alt mr-2"></i> รีเฟรชข้อมูล</button>
                 </div>
 
                 <!-- พื้นที่วาดตารางสำหรับ Download -->
@@ -2665,6 +2912,18 @@
                     ${filteredTeachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('')}
                 `;
             }
+
+            window.forceRefreshDownload = async () => {
+                showLoading(true);
+                await Promise.all([
+                    getCachedData('ผลการประมวลตารางสอน', true),
+                    getCachedData('ข้อมูลครู', true)
+                ]);
+                showLoading(false);
+                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'ดึงข้อมูลล่าสุดจากระบบแล้ว', timer: 1500, showConfirmButton: false}).then(() => {
+                    loadPage('download');
+                });
+            };
 
             window.previewTimetable = () => {
                 const type = document.getElementById('dl_type').value;
