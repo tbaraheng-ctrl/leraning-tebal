@@ -354,6 +354,7 @@
         // ==========================================
         const pages = {
             'dashboard': { title: 'หน้าแรก', icon: 'fa-home', roles: ['admin', 'user'], render: renderDashboard },
+            'profile': { title: 'ตั้งค่าบัญชี', icon: 'fa-user-cog', roles: ['admin', 'user'], render: renderProfile },
             'teachers': { title: 'จัดการข้อมูลครู', icon: 'fa-chalkboard-teacher', roles: ['admin'], render: renderTeachers },
             'courses': { title: 'จัดการข้อมูลรายวิชา', icon: 'fa-book', roles: ['admin'], render: renderCourses },
             'settings': { title: 'ตั้งค่ารูปแบบตาราง', icon: 'fa-cogs', roles: ['admin'], render: renderSettings },
@@ -463,6 +464,90 @@
                     ${menuCards}
                 </div>
             `;
+        }
+
+        // --- ตั้งค่าบัญชีผู้ใช้ (Profile) ---
+        async function renderProfile(container) {
+            let teachers = await getCachedData('ข้อมูลครู');
+            let myIndex = teachers.findIndex(t => t['ชื่อ-สกุล'] === currentUser);
+            
+            if (myIndex === -1) {
+                container.innerHTML = `<div class="p-4 bg-red-100 text-red-700 rounded-lg shadow">ไม่พบข้อมูลบัญชีของคุณในระบบ กรุณาติดต่อผู้ดูแลระบบ</div>`;
+                return;
+            }
+            
+            let myData = teachers[myIndex];
+
+            container.innerHTML = `
+                <div class="bg-white p-8 rounded-xl shadow-md max-w-2xl mx-auto mt-6 border-t-4 border-gold">
+                    <div class="text-center mb-8">
+                        <div class="w-20 h-20 bg-navy text-gold rounded-full flex items-center justify-center text-4xl mx-auto mb-4 shadow-inner">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-navy">ตั้งค่าบัญชีผู้ใช้</h3>
+                        <p class="text-gray-500 text-sm mt-1">เปลี่ยนชื่อผู้ใช้และรหัสผ่านสำหรับเข้าสู่ระบบ</p>
+                    </div>
+                    <form id="profileForm" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-สกุล (ไม่สามารถแก้ไขได้)</label>
+                            <input type="text" value="${myData['ชื่อ-สกุล']}" readonly class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-100 text-gray-500 cursor-not-allowed">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อผู้ใช้ (Username)</label>
+                            <input type="text" id="p_username" value="${myData['ชื่อผู้ใช้']}" required class="w-full border border-gray-300 rounded-lg p-2.5 focus:border-gold focus:ring-1 focus:ring-gold outline-none transition">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">รหัสผ่าน (Password)</label>
+                            <div class="relative">
+                                <input type="password" id="p_password" value="${myData['รหัสผ่าน']}" required class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 focus:border-gold focus:ring-1 focus:ring-gold outline-none transition">
+                                <span class="absolute inset-y-0 right-0 flex items-center pr-3 cursor-pointer text-gray-400 hover:text-navy" onclick="const p = document.getElementById('p_password'); p.type = p.type === 'password' ? 'text' : 'password'; this.querySelector('i').classList.toggle('fa-eye'); this.querySelector('i').classList.toggle('fa-eye-slash');">
+                                    <i class="fas fa-eye"></i>
+                                </span>
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">*กรุณาจำรหัสผ่านใหม่ของท่านให้ดี</p>
+                        </div>
+                        <div class="pt-4 border-t border-gray-200 mt-6">
+                            <button type="submit" class="w-full bg-navy text-white font-bold text-lg px-6 py-3 rounded-lg hover:bg-opacity-90 shadow-md transition transform hover:-translate-y-1 flex items-center justify-center">
+                                <i class="fas fa-save mr-2"></i> บันทึกการเปลี่ยนแปลง
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+
+            document.getElementById('profileForm').onsubmit = async (e) => {
+                e.preventDefault();
+                const newUsername = document.getElementById('p_username').value.trim();
+                const newPassword = document.getElementById('p_password').value.trim();
+
+                if(!newUsername || !newPassword) {
+                    return Swal.fire('แจ้งเตือน', 'กรุณากรอกข้อมูลให้ครบถ้วน', 'warning');
+                }
+
+                const updatedData = { ...myData, 'ชื่อผู้ใช้': newUsername, 'รหัสผ่าน': newPassword };
+
+                showLoading(true);
+                let res = await callAPI('saveData', { sheetName: 'ข้อมูลครู', rowId: myIndex, data: updatedData }, true);
+                if (res) {
+                    await getCachedData('ข้อมูลครู', true); // Force refresh cache
+                    
+                    // Update localStorage if "remember me" was used
+                    if (localStorage.getItem('ns_timetable_user')) {
+                        localStorage.setItem('ns_timetable_user', newUsername);
+                        localStorage.setItem('ns_timetable_pass', newPassword);
+                    }
+
+                    showLoading(false);
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'สำเร็จ',
+                        text: 'อัปเดตชื่อผู้ใช้และรหัสผ่านเรียบร้อยแล้ว'
+                    });
+                } else {
+                    showLoading(false);
+                    Swal.fire('ข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+                }
+            };
         }
 
         // --- 1. จัดการข้อมูลครู ---
