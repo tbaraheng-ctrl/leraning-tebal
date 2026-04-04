@@ -286,7 +286,7 @@
 
         // โหลดข้อมูลทุกอย่างเตรียมไว้ทันทีที่เข้าสู่ระบบสำเร็จ!
         function prefetchAllData() {
-            const allSheets = ['ข้อมูลครู', 'ข้อมูลรายวิชา', 'การตั้งค่า', 'ล๊อคตาราง', 'กำหนดตารางสอน', 'ผลการประมวลตารางสอน'];
+            const allSheets = ['ข้อมูลครู', 'ข้อมูลรายวิชา', 'การตั้งค่า', 'ล๊อคตาราง', 'กำหนดตารางสอน', 'ผลการประมวลตารางสอน', 'คำสั่งสอน', 'กำหนดสิทธิ'];
             allSheets.forEach(sheet => getCachedData(sheet, false, true)); // true = isBackground
         }
 
@@ -357,6 +357,7 @@
             'teachers': { title: 'จัดการข้อมูลครู', icon: 'fa-chalkboard-teacher', roles: ['admin'], render: renderTeachers },
             'courses': { title: 'จัดการข้อมูลรายวิชา', icon: 'fa-book', roles: ['admin'], render: renderCourses },
             'settings': { title: 'ตั้งค่ารูปแบบตาราง', icon: 'fa-cogs', roles: ['admin'], render: renderSettings },
+            'permissions': { title: 'กำหนดสิทธิจัดตาราง', icon: 'fa-user-shield', roles: ['admin'], render: renderPermissions },
             'lock': { title: 'ล๊อครายวิชา', icon: 'fa-lock', roles: ['admin'], render: renderLock },
             'create_table': { title: 'จัดทำตารางสอน', icon: 'fa-calendar-plus', roles: ['admin', 'user'], render: renderCreateTable },
             'process': { title: 'ประมวลผลตารางสอน', icon: 'fa-microchip', roles: ['admin'], render: renderProcess },
@@ -632,6 +633,11 @@
                             </button>
                             <button onclick="refreshCourseTable()" class="bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-2 rounded text-sm transition" title="ดึงข้อมูลล่าสุด"><i class="fas fa-sync-alt"></i></button>
                             
+                            <select id="filter_c_term" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
+                                <option value="all">ทุกภาคเรียน</option>
+                                <option value="1">ภาคเรียนที่ 1</option>
+                                <option value="2">ภาคเรียนที่ 2</option>
+                            </select>
                             <select id="filter_c_grade" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
                                 <option value="all">ทุกระดับชั้น</option>
                                 <option value="ม.1">ม.1</option>
@@ -851,21 +857,25 @@
                 document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); // เคลียร์ Checkbox
                 document.getElementById('courseModalTitle').innerText = 'แก้ไขข้อมูลรายวิชา';
                 document.getElementById('courseModal').classList.remove('hidden');
-            }
+            };
+
+            window.resetCourseForm = () => { document.getElementById('courseForm').reset(); document.getElementById('c_id').value = ''; document.getElementById('c_btn_save').innerText = 'บันทึก'; document.getElementById('c_btn_cancel').classList.add('hidden'); }
             
             window.filterCourseTable = () => {
                 const filterGroup = document.getElementById('filter_c_group').value;
                 const filterGrade = document.getElementById('filter_c_grade').value;
+                const filterTerm = document.getElementById('filter_c_term').value;
                 
                 window.filteredCourseList = window.courseDataList.filter(c => {
                     let matchGroup = filterGroup === 'all' || c['กลุ่มสาระการเรียนรู้'] === filterGroup;
+                    let matchTerm = filterTerm === 'all' || c['ภาคเรียนที่'] == filterTerm;
                     let matchGrade = true;
                     if (filterGrade !== 'all') {
                         let cLevels = (c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim());
                         // เช็คว่าห้องเรียนขึ้นต้นด้วยระดับชั้นที่เลือกหรือไม่ (เช่น เลือก ม.1 ก็จะเจอ ม.1/1, ม.1/2)
                         matchGrade = cLevels.some(l => l.startsWith(filterGrade));
                     }
-                    return matchGroup && matchGrade;
+                    return matchGroup && matchGrade && matchTerm;
                 });
                 window.renderCourseRows(window.filteredCourseList);
             }
@@ -978,16 +988,18 @@
                 // ดึงการตั้งค่าเพื่อเอา โลโก้ และ ปีการศึกษามาแสดง
                 let settingsArr = await getCachedData('การตั้งค่า');
                 let settings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {};
-                let term = settings.term || '1';
-                let year = settings.year || '2567';
+                let sysTerm = settings.term || '1';
+                let sysYear = settings.year || '2567';
                 let logoUrl = settings.logo || 'https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png';
                 let schoolName = settings.school_name || 'โรงเรียนนราสิกขาลัย';
 
                 const groupFilter = document.getElementById('filter_c_group').value;
                 const gradeFilter = document.getElementById('filter_c_grade').value;
+                const termFilter = document.getElementById('filter_c_term').value;
                 let subtitleText = 'ทั้งหมด';
-                if(gradeFilter !== 'all' || groupFilter !== 'all') {
+                if(gradeFilter !== 'all' || groupFilter !== 'all' || termFilter !== 'all') {
                     subtitleText = '';
+                    if(termFilter !== 'all') subtitleText += `ภาคเรียนที่ ${termFilter} `;
                     if(gradeFilter !== 'all') subtitleText += `ชั้น ${gradeFilter} `;
                     if(groupFilter !== 'all') subtitleText += `กลุ่มสาระฯ ${groupFilter}`;
                 }
@@ -1045,7 +1057,7 @@
                         <div class="header">
                             <img src="${logoUrl}" class="logo">
                             <h2>รายงานข้อมูลรายวิชา (${subtitleText.trim()})</h2>
-                            <p>${schoolName} ภาคเรียนที่ ${term}/${year}</p>
+                            <p>${schoolName} ปีการศึกษา ${sysYear}</p>
                             <p>ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')}</p>
                         </div>
 
@@ -1412,6 +1424,54 @@
             };
         }
 
+        // --- เมนูใหม่: กำหนดสิทธิจัดตาราง ---
+        async function renderPermissions(container) {
+            let permArr = await getCachedData('กำหนดสิทธิ');
+            let allowedGroups = permArr.length > 0 ? JSON.parse(permArr[0]['JSON_DATA'] || '[]') : [];
+
+            let checkboxesHtml = subjectGroups.map((g, idx) => `
+                <label class="flex items-center space-x-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition shadow-sm">
+                    <input type="checkbox" value="${g}" class="perm-chk w-5 h-5 text-navy border-gray-300 rounded focus:ring-navy" ${allowedGroups.includes(g) ? 'checked' : ''}>
+                    <span class="text-gray-800 font-medium">${g}</span>
+                </label>
+            `).join('');
+
+            container.innerHTML = `
+                <div class="bg-white p-8 rounded-xl shadow-md max-w-4xl mx-auto mt-4">
+                    <div class="text-center mb-8">
+                        <i class="fas fa-user-shield text-5xl text-navy mb-3"></i>
+                        <h3 class="text-2xl font-bold text-navy">กำหนดสิทธิจัดตารางสอน</h3>
+                        <p class="text-gray-500 mt-2">เลือกกลุ่มสาระการเรียนรู้ที่อนุญาตให้เข้ามาจัดทำตารางสอนได้ในขณะนี้ <br><span class="text-xs text-red-500">*หากไม่เลือกกลุ่มใดเลย ครูทั่วไปจะไม่สามารถเข้าจัดตารางสอนได้</span></p>
+                    </div>
+                    <form id="permForm">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+                            ${checkboxesHtml}
+                        </div>
+                        <div class="pt-4 border-t border-gray-200 flex justify-end">
+                            <button type="submit" class="bg-navy text-white font-bold text-lg px-8 py-3 rounded-lg hover:bg-opacity-90 shadow-md transition transform hover:-translate-y-1 flex items-center">
+                                <i class="fas fa-save mr-2"></i> บันทึกสิทธิการเข้าถึง
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+
+            document.getElementById('permForm').onsubmit = async (e) => {
+                e.preventDefault();
+                let selected = Array.from(document.querySelectorAll('.perm-chk:checked')).map(c => c.value);
+                
+                showLoading(true);
+                let res = await callAPI('saveData', { sheetName: 'กำหนดสิทธิ', rowId: 0, data: { 'JSON_DATA': JSON.stringify(selected) }, isSettings: true }, true);
+                if(res) {
+                    await getCachedData('กำหนดสิทธิ', true);
+                    showLoading(false);
+                    Swal.fire('สำเร็จ', 'บันทึกสิทธิการจัดตารางสอนเรียบร้อยแล้ว', 'success');
+                } else {
+                    showLoading(false);
+                    Swal.fire('ข้อผิดพลาด', 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+                }
+            };
+        }
 
         // --- 4. & 5. ล๊อครายวิชา & จัดทำตารางสอน ---
         async function renderScheduleBase(container, isLockMode) {
@@ -1431,7 +1491,35 @@
             let days = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
             let dayOptions = days.map(d => `<option value="${d}">${d}</option>`).join('');
             
+            let dayCheckboxesHtml = days.map(d => `
+                <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                    <input type="checkbox" value="${d}" class="sch-day-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="updateMainFormDropdowns()">
+                    <span class="text-sm text-navy">${d}</span>
+                </label>
+            `).join('');
+
+            let t_dayCheckboxesHtml = days.map(d => `
+                <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                    <input type="checkbox" value="${d}" class="t-sch-day-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                    <span class="text-sm text-navy">${d}</span>
+                </label>
+            `).join('');
+            
             let periodOptions = Array.from({length: settings.periods || 8}, (_, i) => `<option value="${i+1}">คาบที่ ${i+1}</option>`).join('');
+            
+            let periodCheckboxesHtml = Array.from({length: settings.periods || 8}, (_, i) => `
+                <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                    <input type="checkbox" value="${i+1}" class="sch-period-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="updateMainFormDropdowns()">
+                    <span class="text-sm text-navy">${i+1}</span>
+                </label>
+            `).join('');
+
+            let t_periodCheckboxesHtml = Array.from({length: settings.periods || 8}, (_, i) => `
+                <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                    <input type="checkbox" value="${i+1}" class="t-sch-period-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                    <span class="text-sm text-navy">${i+1}</span>
+                </label>
+            `).join('');
             
             // เตรียมตัวเลือกสำหรับ แผนการเรียน และ สถานที่เรียน
             let planOptions = learningPlans.map(p => `<option value="${p}">${p}</option>`).join('');
@@ -1463,6 +1551,16 @@
             // ตัวแปรสำหรับจัดการสถานะเบื้องหลัง
             window.scheduleBaseData = dataList.map((d, index) => ({...d, originalIndex: index}));
             window.pendingSchBaseSync = 0;
+
+            let tabHtml = '';
+            if (isLockMode) {
+                tabHtml = `
+                    <div class="flex border-b border-gray-200 mb-4">
+                        <button type="button" id="tab_lock_class" class="py-2 px-4 text-navy font-bold border-b-2 border-navy outline-none" onclick="switchLockTab('class')">ล๊อควิชาเรียน (ห้อง)</button>
+                        <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคกิจกรรม (ครู)</button>
+                    </div>
+                `;
+            }
 
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative mb-6">
@@ -1513,8 +1611,18 @@
                                     <div><label class="block text-gray-700 font-medium mb-1">แผนการเรียน</label><select id="sch_plan" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${planOptions}</select></div>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                    <div><label class="block text-gray-700 font-medium mb-1">วัน</label><select id="sch_day" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${dayOptions}</select></div>
-                                    <div><label class="block text-gray-700 font-medium mb-1">คาบที่</label><select id="sch_period" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateMainFormDropdowns()"><option value="">เลือก...</option>${periodOptions}</select></div>
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">วัน <span class="text-xs text-gray-500 font-normal">(เลือกได้มากกว่า 1)</span></label>
+                                        <div class="flex flex-wrap gap-2 items-center border border-gray-300 rounded p-1.5 bg-white min-h-[38px]">
+                                            ${dayCheckboxesHtml}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">คาบที่ <span class="text-xs text-gray-500 font-normal">(เลือกได้มากกว่า 1)</span></label>
+                                        <div class="flex flex-wrap gap-2 items-center border border-gray-300 rounded p-1.5 bg-white min-h-[38px]">
+                                            ${periodCheckboxesHtml}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                     <div>
@@ -1550,8 +1658,18 @@
                             <form id="schTeacherForm" class="flex-col gap-4 text-sm hidden">
                                 <input type="hidden" id="t_sch_id">
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                    <div><label class="block text-gray-700 font-medium mb-1">วัน</label><select id="t_sch_day" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${dayOptions}</select></div>
-                                    <div><label class="block text-gray-700 font-medium mb-1">คาบที่</label><select id="t_sch_period" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${periodOptions}</select></div>
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">วัน <span class="text-xs text-gray-500 font-normal">(เลือกได้มากกว่า 1)</span></label>
+                                        <div class="flex flex-wrap gap-2 items-center border border-gray-300 rounded p-1.5 bg-white min-h-[38px]">
+                                            ${t_dayCheckboxesHtml}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-gray-700 font-medium mb-1">คาบที่ <span class="text-xs text-gray-500 font-normal">(เลือกได้มากกว่า 1)</span></label>
+                                        <div class="flex flex-wrap gap-2 items-center border border-gray-300 rounded p-1.5 bg-white min-h-[38px]">
+                                            ${t_periodCheckboxesHtml}
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                     <div><label class="block text-gray-700 font-medium mb-1">ชื่อครู</label><select id="t_sch_teacher" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptsHtml}</select></div>
@@ -1641,13 +1759,13 @@
             window.updateMainFormDropdowns = (existingData = null) => {
                 const room = document.getElementById('sch_room').value;
                 const plan = document.getElementById('sch_plan').value;
-                const day = document.getElementById('sch_day').value;
-                const period = document.getElementById('sch_period').value;
+                const dayChks = Array.from(document.querySelectorAll('.sch-day-chk:checked')).map(c => c.value);
+                const periodChks = Array.from(document.querySelectorAll('.sch-period-chk:checked')).map(c => parseInt(c.value));
                 const codeSelect = document.getElementById('sch_code');
                 const locSelect = document.getElementById('sch_location');
 
                 // ถ้าระบุข้อมูลไม่ครบ ให้ปิดการใช้งานตัวเลือก
-                if (!room || !plan || !day || !period) {
+                if (!room || !plan || dayChks.length === 0 || periodChks.length === 0) {
                     codeSelect.innerHTML = '<option value="">-- กรุณาเลือกห้อง, แผน, วัน และคาบก่อน --</option>';
                     locSelect.innerHTML = '<option value="">-- ไม่ระบุ --</option>';
                     if(!existingData) {
@@ -1682,7 +1800,7 @@
 
                 let busyTeachers = new Set();
                 window.scheduleBaseData.forEach(slot => {
-                    if (slot['วัน'] === day && parseInt(slot['คาบที่']) === parseInt(period)) {
+                    if (dayChks.includes(slot['วัน']) && periodChks.includes(parseInt(slot['คาบที่']))) {
                         if (existingData && slot.originalIndex === existingData.originalIndex) return;
                         if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).trim());
                     }
@@ -1714,7 +1832,7 @@
                 // 2. ประมวลผลสถานที่เรียน
                 let busyLocations = new Set();
                 window.scheduleBaseData.forEach(slot => {
-                    if (slot['วัน'] === day && parseInt(slot['คาบที่']) === parseInt(period)) {
+                    if (dayChks.includes(slot['วัน']) && periodChks.includes(parseInt(slot['คาบที่']))) {
                         if (existingData && slot.originalIndex === existingData.originalIndex) return;
                         let loc = String(slot['สถานที่เรียน'] || '').trim();
                         if (loc && loc !== '-') busyLocations.add(loc);
@@ -1800,7 +1918,7 @@
                     let index = window.scheduleBaseData.findIndex(item => item.originalIndex === rowId);
                     if(index !== -1) window.scheduleBaseData[index] = { ...data, originalIndex: rowId, isPending: true };
                 } else {
-                    window.scheduleBaseData.push({ ...data, originalIndex: 'temp_' + Date.now(), isPending: true });
+                    window.scheduleBaseData.push({ ...data, originalIndex: 'temp_' + Date.now() + Math.random(), isPending: true });
                 }
                 window.renderSchRows(window.scheduleBaseData);
 
@@ -1832,23 +1950,54 @@
                 e.preventDefault();
                 const rowIdStr = document.getElementById('sch_id').value;
                 const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
+                const dayChks = Array.from(document.querySelectorAll('.sch-day-chk:checked')).map(c => c.value);
+                const periodChks = Array.from(document.querySelectorAll('.sch-period-chk:checked')).map(c => parseInt(c.value));
+                const locationVal = document.getElementById('sch_location').value.trim();
                 
                 // ตรวจสอบความครบถ้วนของข้อมูล
+                if (dayChks.length === 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกวันอย่างน้อย 1 วัน', 'warning');
+                    return;
+                }
+                if (periodChks.length === 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
+                    return;
+                }
                 if (!document.getElementById('sch_code').value) {
                     Swal.fire('แจ้งเตือน', 'กรุณาเลือกรหัสวิชา', 'warning');
                     return;
                 }
 
-                const data = {
-                    'ห้องเรียน': document.getElementById('sch_room').value, 'แผนการเรียน': document.getElementById('sch_plan').value,
-                    'วัน': document.getElementById('sch_day').value, 'คาบที่': document.getElementById('sch_period').value,
-                    'รหัสวิชา': document.getElementById('sch_code').value, 'ชื่อวิชา': document.getElementById('sch_name').value,
-                    'ชื่อครูผู้สอน': document.getElementById('sch_teacher').value, 'สถานที่เรียน': document.getElementById('sch_location').value,
-                    'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ'
-                };
+                if (locationVal) {
+                    let currentRooms = (settings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
+                    if (!currentRooms.includes(locationVal)) {
+                        currentRooms.push(locationVal);
+                        settings.teaching_rooms = currentRooms.join(',');
+                        document.getElementById('dl_sch_locations').innerHTML = currentRooms.map(r => `<option value="${r}">${r}</option>`).join('');
+                        callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(settings) }, isSettings: true }, true);
+                    }
+                }
 
-                processSaveData(data, rowId);
                 window.closeSchBaseModal(); 
+
+                let tempIdx = 0;
+                // วนลูปบันทึกตามจำนวนวันและคาบที่เลือก
+                dayChks.forEach(d => {
+                    periodChks.forEach(p => {
+                        const data = {
+                            'ห้องเรียน': document.getElementById('sch_room').value, 'แผนการเรียน': document.getElementById('sch_plan').value,
+                            'วัน': d, 'คาบที่': p,
+                            'รหัสวิชา': document.getElementById('sch_code').value, 'ชื่อวิชา': document.getElementById('sch_name').value,
+                            'ชื่อครูผู้สอน': document.getElementById('sch_teacher').value, 'สถานที่เรียน': locationVal,
+                            'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
+                            'ผู้บันทึก': currentUser
+                        };
+                        // หากแก้ไข จะใช้ rowId เดิมอัปเดตคาบแรกที่เลือก ส่วนคาบอื่นๆ ให้บันทึกเป็นแถวใหม่ (rowId=null)
+                        const currentRowId = (tempIdx === 0) ? rowId : null;
+                        processSaveData(data, currentRowId);
+                        tempIdx++;
+                    });
+                });
             };
 
             // การ Submit ของฟอร์มล๊อคกิจกรรมครู
@@ -1857,15 +2006,17 @@
                 const rowIdStr = document.getElementById('t_sch_id').value;
                 const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
                 const actVal = document.getElementById('t_sch_activity').value.trim();
+                const dayChks = Array.from(document.querySelectorAll('.t-sch-day-chk:checked')).map(c => c.value);
+                const periodChks = Array.from(document.querySelectorAll('.t-sch-period-chk:checked')).map(c => parseInt(c.value));
                 
-                const data = {
-                    'ห้องเรียน': '-', 'แผนการเรียน': '-',
-                    'วัน': document.getElementById('t_sch_day').value, 'คาบที่': document.getElementById('t_sch_period').value,
-                    'รหัสวิชา': 'กิจกรรม', 'ชื่อวิชา': actVal,
-                    'ชื่อครูผู้สอน': document.getElementById('t_sch_teacher').value, 'สถานที่เรียน': '-',
-                    'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
-                    'ผู้บันทึก': currentUser
-                };
+                if (dayChks.length === 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกวันอย่างน้อย 1 วัน', 'warning');
+                    return;
+                }
+                if (periodChks.length === 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
+                    return;
+                }
 
                 if (actVal && !window.allActivities.includes(actVal)) {
                     let currentCustom = (settings.teacher_activities || '').split(',').map(a=>a.trim()).filter(a=>a);
@@ -1876,8 +2027,24 @@
                     callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(settings) }, isSettings: true }, true);
                 }
 
-                processSaveData(data, rowId);
                 window.closeSchBaseModal(); 
+
+                let tempIdx = 0;
+                dayChks.forEach(d => {
+                    periodChks.forEach(p => {
+                        const data = {
+                            'ห้องเรียน': '-', 'แผนการเรียน': '-',
+                            'วัน': d, 'คาบที่': p,
+                            'รหัสวิชา': 'กิจกรรม', 'ชื่อวิชา': actVal,
+                            'ชื่อครูผู้สอน': document.getElementById('t_sch_teacher').value, 'สถานที่เรียน': '-',
+                            'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
+                            'ผู้บันทึก': currentUser
+                        };
+                        const currentRowId = (tempIdx === 0) ? rowId : null;
+                        processSaveData(data, currentRowId);
+                        tempIdx++;
+                    });
+                });
             };
 
             // ฟังก์ชันลบที่ถูกเรียกจากใน Modal (สำหรับการแก้ไข)
@@ -1930,8 +2097,14 @@
                     }
                     
                     document.getElementById('t_sch_id').value = idx;
-                    document.getElementById('t_sch_day').value = data['วัน'] || '';
-                    document.getElementById('t_sch_period').value = data['คาบที่'] || '';
+                    document.querySelectorAll('.t-sch-day-chk').forEach(c => c.checked = false);
+                    const tDayChk = document.querySelector(`.t-sch-day-chk[value="${data['วัน']}"]`);
+                    if(tDayChk) tDayChk.checked = true;
+
+                    document.querySelectorAll('.t-sch-period-chk').forEach(c => c.checked = false);
+                    const tPeriodChk = document.querySelector(`.t-sch-period-chk[value="${data['คาบที่']}"]`);
+                    if(tPeriodChk) tPeriodChk.checked = true;
+
                     document.getElementById('t_sch_teacher').value = data['ชื่อครูผู้สอน'] || '';
                     document.getElementById('t_sch_activity').value = data['ชื่อวิชา'] || '';
                     
@@ -1949,8 +2122,14 @@
                     document.getElementById('sch_id').value = idx;
                     document.getElementById('sch_room').value = data['ห้องเรียน'] || '';
                     document.getElementById('sch_plan').value = data['แผนการเรียน'] || '';
-                    document.getElementById('sch_day').value = data['วัน'] || '';
-                    document.getElementById('sch_period').value = data['คาบที่'] || '';
+                    
+                    document.querySelectorAll('.sch-day-chk').forEach(c => c.checked = false);
+                    const dayChk = document.querySelector(`.sch-day-chk[value="${data['วัน']}"]`);
+                    if(dayChk) dayChk.checked = true;
+
+                    document.querySelectorAll('.sch-period-chk').forEach(c => c.checked = false);
+                    const pChk = document.querySelector(`.sch-period-chk[value="${data['คาบที่']}"]`);
+                    if(pChk) pChk.checked = true;
                     
                     // สร้างตัวเลือก dropdown ใหม่ตามข้อมูลที่เลือก
                     window.updateMainFormDropdowns(data);
@@ -1971,6 +2150,8 @@
             window.resetSchForm = () => { 
                 document.getElementById('schForm').reset(); 
                 document.getElementById('sch_id').value = ''; 
+                document.querySelectorAll('.sch-day-chk').forEach(c => c.checked = false);
+                document.querySelectorAll('.sch-period-chk').forEach(c => c.checked = false);
                 document.getElementById('sch_code').innerHTML = '<option value="">-- เลือกรหัสวิชา --</option>'; // รีเซ็ตตัวเลือก
                 document.getElementById('sch_location').innerHTML = '<option value="">-- ไม่ระบุ --</option>'; // รีเซ็ตตัวเลือก
                 document.getElementById('sch_btn_save').innerText = 'บันทึก'; 
@@ -1983,6 +2164,8 @@
                 if(document.getElementById('schTeacherForm')) {
                     document.getElementById('schTeacherForm').reset(); 
                     document.getElementById('t_sch_id').value = ''; 
+                    document.querySelectorAll('.t-sch-day-chk').forEach(c => c.checked = false);
+                    document.querySelectorAll('.t-sch-period-chk').forEach(c => c.checked = false);
                     document.getElementById('t_sch_btn_save').innerText = 'บันทึกกิจกรรม'; 
                     document.getElementById('t_sch_btn_save').classList.replace('bg-gold', 'bg-navy');
                     document.getElementById('t_sch_btn_save').classList.replace('text-navy', 'text-white');
@@ -1996,12 +2179,39 @@
         // --- 5. จัดทำตารางสอน (แบบใหม่ Interactive Grid & Background Sync) ---
         async function renderCreateTable(container) {
             // โหลดข้อมูลแบบขนาน
-            let [dataList, courses, settingsArr] = await Promise.all([
+            let [dataList, courses, settingsArr, teachersArr, permArr] = await Promise.all([
                 getCachedData('กำหนดตารางสอน'),
                 getCachedData('ข้อมูลรายวิชา'),
-                getCachedData('การตั้งค่า')
+                getCachedData('การตั้งค่า'),
+                getCachedData('ข้อมูลครู'),
+                getCachedData('กำหนดสิทธิ')
             ]);
             
+            // --- Check Permissions ---
+            let allowedGroups = permArr.length > 0 ? JSON.parse(permArr[0]['JSON_DATA'] || '[]') : [];
+            if (currentRole !== 'admin') {
+                let myTeacherInfo = teachersArr.find(t => t['ชื่อ-สกุล'] === currentUser);
+                let myGroup = myTeacherInfo ? myTeacherInfo['กลุ่มสาระการเรียนรู้'] : '';
+                
+                if (!allowedGroups.includes(myGroup)) {
+                    let activeGroups = allowedGroups.length > 0 ? allowedGroups.join(', ') : 'ไม่มีกลุ่มใด';
+                    container.innerHTML = `
+                        <div class="bg-white p-10 rounded-xl shadow-md text-center max-w-2xl mx-auto mt-10 border-t-4 border-red-500">
+                            <i class="fas fa-lock text-6xl text-red-500 mb-6"></i>
+                            <h3 class="text-2xl font-bold text-navy mb-4">ระบบถูกจำกัดการเข้าถึง</h3>
+                            <p class="text-gray-700 text-lg leading-relaxed">
+                                ขณะนี้กลุ่มสาระการเรียนรู้ <br><span class="text-gold font-bold text-xl">${activeGroups}</span><br> กำลังจัดตารางสอน
+                            </p>
+                            <div class="bg-red-50 text-red-600 p-4 rounded-lg mt-6 text-sm font-medium">
+                                ท่านยังไม่ได้รับสิทธิในการจัดตารางสอนในช่วงเวลานี้ โปรดติดต่อผู้ดูแลระบบ
+                            </div>
+                        </div>
+                    `;
+                    return; 
+                }
+            }
+            // ------------------------
+
             let settings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {};
             let periodsCount = settings.periods || 8;
             let rooms = (settings.rooms || '').split(',').map(r => r.trim()).filter(r => r);
@@ -2114,16 +2324,16 @@
                             <input type="hidden" id="m_plan">
                             <input type="hidden" id="m_creator">
                             
-                            <div class="grid grid-cols-2 gap-4 mb-4">
-                                <div class="bg-gray-100 p-2 rounded text-center border">
-                                    <span class="text-xs text-gray-500 block">วัน</span>
-                                    <span class="font-bold text-navy" id="m_day_display"></span>
-                                    <input type="hidden" id="m_day">
-                                </div>
-                                <div class="bg-gray-100 p-2 rounded text-center border">
-                                    <span class="text-xs text-gray-500 block">คาบที่</span>
-                                    <span class="font-bold text-navy" id="m_period_display"></span>
-                                    <input type="hidden" id="m_period">
+                            <div class="grid grid-cols-1 mb-4">
+                                <div class="bg-gray-100 p-3 rounded text-left border">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <span class="text-sm font-medium text-gray-700">วัน: <span class="font-bold text-navy text-base" id="m_day_display"></span></span>
+                                        <input type="hidden" id="m_day">
+                                    </div>
+                                    <label class="block mb-2 text-sm font-medium text-gray-700 border-t border-gray-300 pt-2">คาบที่ <span class="text-xs text-gray-500 font-normal">(ติ๊กเลือกได้มากกว่า 1)</span></label>
+                                    <div class="flex flex-wrap gap-2 items-center" id="m_period_container">
+                                        <!-- Checkboxes injected here -->
+                                    </div>
                                 </div>
                             </div>
 
@@ -2454,18 +2664,22 @@
                 document.getElementById('missingCoursesContainer').innerHTML = missingHtml;
             };
 
-            // ฟังก์ชันเปิด Modal
-            window.openSchModal = (day, period, existingData) => {
-                const room = document.getElementById('grid_room').value;
-                const plan = document.getElementById('grid_plan').value;
+            // ฟังก์ชันอัปเดตตัวเลือกใน Modal
+            window.updateModalDropdowns = (existingData = null) => {
+                const room = document.getElementById('m_room').value;
+                const plan = document.getElementById('m_plan').value;
+                const day = document.getElementById('m_day').value;
+                const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
 
-                // ตั้งค่าค่าพื้นฐานที่ล็อคไว้
-                document.getElementById('m_day_display').innerText = day;
-                document.getElementById('m_day').value = day;
-                document.getElementById('m_period_display').innerText = period;
-                document.getElementById('m_period').value = period;
-                document.getElementById('m_room').value = room;
-                document.getElementById('m_plan').value = plan;
+                if(periodChks.length === 0) {
+                    document.getElementById('m_code').innerHTML = '<option value="">-- กรุณาเลือกคาบ --</option>';
+                    document.getElementById('m_location').innerHTML = '<option value="">-- ไม่ระบุ --</option>';
+                    if(!existingData) {
+                        document.getElementById('m_name').value = '';
+                        document.getElementById('m_teacher').value = '';
+                    }
+                    return;
+                }
 
                 // --- ประมวลผลตัวเลือกรหัสวิชา (เช็คโควต้า และ เช็คครูติดสอน) ---
                 const roomData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
@@ -2491,7 +2705,7 @@
 
                 let busyTeachers = new Set();
                 window.interactiveSchData.forEach(slot => {
-                    if (slot['วัน'] === day && parseInt(slot['คาบที่']) === parseInt(period)) {
+                    if (slot['วัน'] === day && periodChks.includes(parseInt(slot['คาบที่']))) {
                         if (existingData && slot.originalIndex === existingData.originalIndex) return; // ไม่นับตัวเอง
                         if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).trim());
                     }
@@ -2527,7 +2741,7 @@
                 let busyLocations = new Set();
                 
                 window.interactiveSchData.forEach(slot => {
-                    if (slot['วัน'] === day && parseInt(slot['คาบที่']) === parseInt(period)) {
+                    if (slot['วัน'] === day && periodChks.includes(parseInt(slot['คาบที่']))) {
                         if (existingData && slot.originalIndex === existingData.originalIndex) return; // ไม่นับตัวเอง
                         let loc = String(slot['สถานที่เรียน'] || '').trim();
                         if (loc && loc !== '-') busyLocations.add(loc);
@@ -2543,29 +2757,61 @@
                         locationOptionsHtml += `<option value="${loc}">${loc}</option>`;
                     }
                 });
+                
+                // คืนค่าถ้าเป็นการแก้ไข
+                if (existingData) {
+                    let existingLoc = existingData['สถานที่เรียน'] || '';
+                    if (existingLoc && existingLoc !== '-' && !allLocations.includes(existingLoc)) {
+                         locationOptionsHtml += `<option value="${existingLoc}">${existingLoc}</option>`;
+                    }
+                }
                 document.getElementById('m_location').innerHTML = locationOptionsHtml;
-                // ----------------------------------------------------
+            };
+
+            // ฟังก์ชันเปิด Modal
+            window.openSchModal = (day, period, existingData) => {
+                const room = document.getElementById('grid_room').value;
+                const plan = document.getElementById('grid_plan').value;
+
+                // ตั้งค่าค่าพื้นฐานที่ล็อคไว้
+                document.getElementById('m_day_display').innerText = day;
+                document.getElementById('m_day').value = day;
+                document.getElementById('m_room').value = room;
+                document.getElementById('m_plan').value = plan;
+
+                // สร้าง Checkbox คาบเรียน
+                let periodChecksHtml = Array.from({length: window.interactivePeriods}, (_, i) => `
+                    <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
+                        <input type="checkbox" value="${i+1}" class="m-period-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="updateModalDropdowns(${existingData ? 'window.currentEditingData' : 'null'})">
+                        <span class="text-sm text-navy">${i+1}</span>
+                    </label>
+                `).join('');
+                document.getElementById('m_period_container').innerHTML = periodChecksHtml;
+
+                // ติ๊กคาบที่ถูกเลือก
+                const pChk = document.querySelector(`.m-period-chk[value="${period}"]`);
+                if(pChk) pChk.checked = true;
 
                 if (existingData) {
+                    window.currentEditingData = existingData; // เก็บไว้ใช้ตอน onchange checkbox
                     // กรณีแก้ไข
                     document.getElementById('modalTitle').innerText = 'แก้ไขตารางสอน';
                     document.getElementById('m_original_id').value = existingData.originalIndex;
                     document.getElementById('m_creator').value = existingData['ผู้บันทึก'] || currentUser;
+                    
+                    window.updateModalDropdowns(existingData);
                     document.getElementById('m_code').value = existingData['รหัสวิชา'];
                     window.autoFillModalCourse(); // เติมชื่อวิชาและครูอัตโนมัติ
-                    
-                    let existingLoc = existingData['สถานที่เรียน'] || '';
-                    if (existingLoc && existingLoc !== '-' && !allLocations.includes(existingLoc)) {
-                         document.getElementById('m_location').innerHTML += `<option value="${existingLoc}">${existingLoc}</option>`;
-                    }
-                    document.getElementById('m_location').value = existingLoc;
-                    
+                    document.getElementById('m_location').value = existingData['สถานที่เรียน'] || '';
                     document.getElementById('m_btn_delete').classList.remove('hidden');
                 } else {
+                    window.currentEditingData = null;
                     // กรณีเพิ่มใหม่
                     document.getElementById('modalTitle').innerText = 'เพิ่มรายวิชาในตาราง';
                     document.getElementById('m_original_id').value = '';
                     document.getElementById('m_creator').value = currentUser; // ประทับชื่อผู้สร้างคนปัจจุบัน
+                    
+                    window.updateModalDropdowns();
                     document.getElementById('m_code').value = '';
                     document.getElementById('m_name').value = '';
                     document.getElementById('m_teacher').value = '';
@@ -2635,6 +2881,12 @@
             document.getElementById('modalSchForm').onsubmit = async (e) => {
                 e.preventDefault();
                 
+                const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
+                if (periodChks.length === 0) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
+                    return;
+                }
+                
                 if(!document.getElementById('m_name').value) {
                     Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
                     return;
@@ -2644,7 +2896,6 @@
                 const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
                 
                 const day = document.getElementById('m_day').value;
-                const period = parseInt(document.getElementById('m_period').value);
                 const teacher = document.getElementById('m_teacher').value;
                 const location = document.getElementById('m_location').value.trim();
                 const room = document.getElementById('m_room').value;
@@ -2658,73 +2909,68 @@
                         currentRooms.push(location);
                         window.interactiveSettings.teaching_rooms = currentRooms.join(',');
                         window.interactiveLocationOpts = currentRooms.map(r => `<option value="${r}">${r}</option>`).join('');
-                        document.getElementById('dl_m_locations').innerHTML = window.interactiveLocationOpts;
+                        // อัปเดต dropdown ใน DOM อื่นๆ ที่เกี่ยวข้องด้วยถ้ามี
                         callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(window.interactiveSettings) }, isSettings: true }, true);
                     }
                 }
 
                 // --- ตรวจสอบข้อมูลชนกัน (Conflict Detection) แบบรัดกุมที่สุด ---
                 let conflictMsg = [];
-                const chkDay = String(day || '').trim();
-                const chkPeriod = period;
-                const chkTeacher = String(teacher || '').trim();
-                const chkLocation = String(location || '').trim();
-                const chkRoom = String(room || '').trim();
-                const chkPlan = String(plan || '').trim();
-                const chkCode = String(code || '').trim();
-
                 let currentCourseCount = 0; // ตัวแปรสำหรับนับจำนวนคาบที่ลงไปแล้วของวิชานี้
 
                 for (let i = 0; i < window.interactiveSchData.length; i++) {
                     let s = window.interactiveSchData[i];
                     if (rowId !== null && s.originalIndex === rowId) continue; // ข้ามตัวมันเองถ้าแก้
 
-                    let sDay = String(s['วัน'] || '').trim();
-                    let sPeriod = parseInt(s['คาบที่']);
-                    let sRoom = String(s['ห้องเรียน'] || '').trim();
-                    let sPlan = String(s['แผนการเรียน'] || '').trim();
-                    let sCode = String(s['รหัสวิชา'] || '').trim();
-                    
                     // นับจำนวนคาบที่วิชานี้ถูกจัดลงตารางในห้องและแผนนี้ไปแล้ว
-                    if (sRoom === chkRoom && sPlan === chkPlan && sCode === chkCode) {
+                    if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
                         currentCourseCount++;
-                    }
-
-                    if (sDay === chkDay && sPeriod === chkPeriod) {
-                        let sTeacher = String(s['ชื่อครูผู้สอน'] || '').trim();
-                        let sLocation = String(s['สถานที่เรียน'] || '').trim();
-
-                        // 1. ตรวจสอบครูผู้สอนชนกัน
-                        if (chkTeacher !== '' && sTeacher === chkTeacher) {
-                            let shortTeacher = chkTeacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
-                            if (s['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
-                                conflictMsg.push('- <b>ครู' + shortTeacher + '</b> ติดภารกิจ "' + s['ชื่อวิชา'] + '" ในคาบนี้');
-                            } else {
-                                conflictMsg.push('- <b>ครู' + shortTeacher + '</b> มีสอนวิชา ' + s['รหัสวิชา'] + ' (ชั้น ' + sRoom + ') อยู่แล้ว');
-                            }
-                        }
-                        
-                        // 2. ตรวจสอบสถานที่ชนกัน (ห้องที่ใช้สอนซ้ำซ้อน)
-                        if (chkLocation !== '' && sLocation === chkLocation && sLocation !== '-') {
-                            conflictMsg.push('- <b>สถานที่ "' + chkLocation + '"</b> มีการใช้งานโดยชั้น ' + sRoom + ' (วิชา ' + s['รหัสวิชา'] + ') อยู่แล้ว');
-                        }
-                        
-                        // 3. ตรวจสอบการลงวิชาซ้ำในห้องและแผนเดียวกัน
-                        if (sRoom === chkRoom && sPlan === chkPlan) {
-                            conflictMsg.push('- <b>ชั้น ' + chkRoom + '</b> มีการจัดวิชา ' + s['รหัสวิชา'] + ' ในคาบนี้ไปแล้ว (กรุณาลบของเดิมก่อนหากต้องการเปลี่ยน)');
-                        }
                     }
                 }
 
-                // 4. ตรวจสอบโควต้าจำนวนคาบต่อสัปดาห์ (1 หน่วยกิต = 2 คาบ)
-                let courseInfo = window.interactiveCourses.find(c => String(c['รหัสวิชา'] || '').trim() === chkCode);
+                // 1. ตรวจสอบโควต้าจำนวนคาบต่อสัปดาห์ (1 หน่วยกิต = 2 คาบ)
+                let courseInfo = window.interactiveCourses.find(c => String(c['รหัสวิชา'] || '').trim() === code);
                 if (courseInfo) {
                     let credit = parseFloat(courseInfo['หน่วยกิต']) || 0;
                     let maxPeriods = credit * 2;
-                    if (maxPeriods > 0 && currentCourseCount >= maxPeriods) {
-                        conflictMsg.push('- <b>วิชา ' + chkCode + '</b> จัดลงตารางครบกำหนดแล้ว (' + maxPeriods + ' คาบ/สัปดาห์ สำหรับ ' + credit + ' หน่วยกิต)');
+                    // นับรวมคาบที่จะกดเพิ่มเข้าไปใหม่ด้วย
+                    if (maxPeriods > 0 && (currentCourseCount + periodChks.length) > maxPeriods) {
+                        conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${periodChks.length} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
                     }
                 }
+
+                // 2. วนลูปเช็คการชนกันแยกตามคาบที่เลือก
+                periodChks.forEach(p => {
+                    window.interactiveSchData.forEach(slot => {
+                        if (rowId !== null && slot.originalIndex === rowId) return; // ไม่นับตัวเอง
+
+                        if (slot['วัน'] === day && parseInt(slot['คาบที่']) === p) {
+                            let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                            let sLocation = String(slot['สถานที่เรียน'] || '').trim();
+                            let sRoom = String(slot['ห้องเรียน'] || '').trim();
+
+                            // ตรวจสอบครูผู้สอนชนกัน
+                            if (teacher !== '' && sTeacher === teacher) {
+                                let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
+                                    conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                } else {
+                                    conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                }
+                            }
+                            
+                            // ตรวจสอบสถานที่ชนกัน (ห้องที่ใช้สอนซ้ำซ้อน)
+                            if (location !== '' && sLocation === location && sLocation !== '-') {
+                                conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${location}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
+                            }
+                            
+                            // ตรวจสอบการลงวิชาซ้ำในห้องและแผนเดียวกัน
+                            if (sRoom === room && slot['แผนการเรียน'] === plan) {
+                                conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
+                            }
+                        }
+                    });
+                });
 
                 if (conflictMsg.length > 0) {
                     Swal.fire({
@@ -2737,52 +2983,56 @@
                     return; 
                 }
                 // --- สิ้นสุดการตรวจสอบ ---
-
-                const data = {
-                    'ห้องเรียน': room, 
-                    'แผนการเรียน': plan,
-                    'วัน': day, 
-                    'คาบที่': period,
-                    'รหัสวิชา': document.getElementById('m_code').value, 
-                    'ชื่อวิชา': document.getElementById('m_name').value,
-                    'ชื่อครูผู้สอน': teacher, 
-                    'สถานที่เรียน': location,
-                    'ประเภท': 'ปกติ',
-                    'ผู้บันทึก': document.getElementById('m_creator').value || currentUser
-                };
                 
                 closeSchModal();
 
-                // Optimistic Update: แก้ไขตารางชั่วคราวให้ผู้ใช้เห็นทันที
-                if (rowId !== null) {
-                    // หากเป็นการแก้ไขข้อมูลเดิม
-                    let index = window.interactiveSchData.findIndex(item => item.originalIndex === rowId);
-                    if(index !== -1) window.interactiveSchData[index] = { ...data, originalIndex: rowId, isPending: true };
-                } else {
-                    // หากเป็นข้อมูลใหม่ ประทับ ID ชั่วคราว
-                    window.interactiveSchData.push({ ...data, originalIndex: 'temp_' + Date.now(), isPending: true });
-                }
-                refreshSchGrid();
+                // วนลูปบันทึกตามจำนวนคาบที่เลือก
+                periodChks.forEach((p, idx) => {
+                    const data = {
+                        'ห้องเรียน': room, 
+                        'แผนการเรียน': plan,
+                        'วัน': day, 
+                        'คาบที่': p,
+                        'รหัสวิชา': code, 
+                        'ชื่อวิชา': document.getElementById('m_name').value,
+                        'ชื่อครูผู้สอน': teacher, 
+                        'สถานที่เรียน': location,
+                        'ประเภท': 'ปกติ',
+                        'ผู้บันทึก': document.getElementById('m_creator').value || currentUser
+                    };
+                    
+                    const currentRowId = (idx === 0) ? rowId : null;
 
-                window.pendingSyncCount++;
-                window.updateSyncStatus();
-
-                // เรียก API บันทึกพื้นหลัง (ส่งพารามิเตอร์ true = ไม่โชว์ loader)
-                callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: rowId, data: data }, true)
-                .then(async (res) => {
-                    window.pendingSyncCount--;
-                    if(window.pendingSyncCount === 0) {
-                        // หากคิวว่างแล้วให้โหลด Data จริงๆ มาอีกครั้งเพื่อให้ได้ Index (rowId) ที่ถูกต้องจาก Server
-                        let newData = await getCachedData('กำหนดตารางสอน', true, true); 
-                        window.interactiveSchData = newData.map((d, index) => ({...d, originalIndex: index}));
-                        refreshSchGrid();
+                    // Optimistic Update: แก้ไขตารางชั่วคราวให้ผู้ใช้เห็นทันที
+                    if (currentRowId !== null) {
+                        let index = window.interactiveSchData.findIndex(item => item.originalIndex === currentRowId);
+                        if(index !== -1) window.interactiveSchData[index] = { ...data, originalIndex: currentRowId, isPending: true };
+                    } else {
+                        window.interactiveSchData.push({ ...data, originalIndex: 'temp_' + Date.now() + '_' + idx, isPending: true });
                     }
+                    
+                    window.pendingSyncCount++;
                     window.updateSyncStatus();
-                }).catch(err => {
-                    window.pendingSyncCount--;
-                    window.updateSyncStatus();
-                    Swal.fire('ข้อผิดพลาด', 'การบันทึกข้อมูลบางส่วนล้มเหลว กรุณาโหลดตารางใหม่', 'error');
+
+                    // เรียก API บันทึกพื้นหลัง
+                    callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: currentRowId, data: data }, true)
+                    .then(async (res) => {
+                        window.pendingSyncCount--;
+                        if(window.pendingSyncCount === 0) {
+                            let newData = await getCachedData('กำหนดตารางสอน', true, true); 
+                            window.interactiveSchData = newData.map((d, index) => ({...d, originalIndex: index}));
+                            refreshSchGrid();
+                        }
+                        window.updateSyncStatus();
+                    }).catch(err => {
+                        window.pendingSyncCount--;
+                        window.updateSyncStatus();
+                        Swal.fire('ข้อผิดพลาด', 'การบันทึกข้อมูลบางส่วนล้มเหลว', 'error');
+                    });
                 });
+                
+                // รีเฟรชตารางหลังจัดเตรียม Optimistic Update เสร็จ
+                refreshSchGrid();
             };
         }
 
@@ -2824,51 +3074,55 @@
             let plans = learningPlans;
 
             container.innerHTML = `
-                <div class="bg-white p-4 rounded-xl shadow-md mb-4 flex flex-wrap gap-3 items-end">
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">ประเภทตาราง</label>
-                        <select id="dl_type" class="border p-2 rounded text-sm w-full" onchange="toggleDlSelectors()">
+                <div class="bg-white p-5 rounded-xl shadow-md mb-4 flex flex-col lg:flex-row gap-4 items-end">
+                    
+                    <div class="flex-1 w-full">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">ประเภทตาราง</label>
+                        <select id="dl_type" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition" onchange="toggleDlSelectors()">
                             <option value="student">ตารางเรียน (นักเรียน)</option>
                             <option value="teacher">ตารางสอน (ครู)</option>
                         </select>
                     </div>
                     
-                    <div id="wrapper_dl_room">
-                        <label class="block text-xs text-gray-600 mb-1">ชั้น/ห้อง</label>
-                        <select id="dl_room" class="border p-2 rounded text-sm w-full">
+                    <div id="wrapper_dl_room" class="flex-1 w-full">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">ชั้น/ห้อง</label>
+                        <select id="dl_room" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition">
                             <option value="">-- เลือกห้องเรียน --</option>
                             <option value="all">ทุกชั้น/ห้อง</option>
                             ${rooms.map(r => `<option value="${r}">${r}</option>`).join('')}
                         </select>
                     </div>
 
-                    <div id="wrapper_dl_plan">
-                        <label class="block text-xs text-gray-600 mb-1">แผนการเรียน</label>
-                        <select id="dl_plan" class="border p-2 rounded text-sm w-full">
+                    <div id="wrapper_dl_plan" class="flex-1 w-full">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">แผนการเรียน</label>
+                        <select id="dl_plan" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition">
                             <option value="all">ทุกแผนการเรียน</option>
                             ${plans.map(p => `<option value="${p}">${p}</option>`).join('')}
                         </select>
                     </div>
 
-                    <div id="wrapper_dl_group" class="hidden">
-                        <label class="block text-xs text-gray-600 mb-1">กลุ่มสาระการเรียนรู้</label>
-                        <select id="dl_group" class="border p-2 rounded text-sm w-full" onchange="updateTeacherOptions()">
+                    <div id="wrapper_dl_group" class="flex-1 w-full hidden">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">กลุ่มสาระการเรียนรู้</label>
+                        <select id="dl_group" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition" onchange="updateTeacherOptions()">
                             <option value="all">ทุกกลุ่มสาระ</option>
                             ${subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('')}
                         </select>
                     </div>
 
-                    <div id="wrapper_dl_teacher" class="hidden">
-                        <label class="block text-xs text-gray-600 mb-1">ครูผู้สอน</label>
-                        <select id="dl_teacher" class="border p-2 rounded text-sm w-full">
+                    <div id="wrapper_dl_teacher" class="flex-1 w-full hidden">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">ครูผู้สอน</label>
+                        <select id="dl_teacher" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition">
                             <option value="all">ทุกคนในกลุ่มสาระ</option>
                             ${teachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('')}
                         </select>
                     </div>
 
-                    <button onclick="previewTimetable()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 h-[38px] flex items-center text-sm"><i class="fas fa-search mr-2"></i> แสดงตาราง</button>
-                    <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 ml-auto h-[38px] flex items-center text-sm"><i class="fas fa-download mr-2"></i> ดาวน์โหลด JPG</button>
-                    <button onclick="forceRefreshDownload()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 h-[38px] flex items-center text-sm" title="ดึงข้อมูลล่าสุดจากระบบ"><i class="fas fa-sync-alt mr-2"></i> รีเฟรชข้อมูล</button>
+                    <div class="flex flex-wrap gap-2 w-full lg:w-auto mt-2 lg:mt-0">
+                        <button onclick="previewTimetable()" class="bg-navy text-white px-4 py-2 rounded-lg hover:bg-opacity-90 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-search mr-2"></i> แสดงตาราง</button>
+                        <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-download mr-2"></i> ดาวน์โหลด JPG</button>
+                        <button onclick="forceRefreshDownload()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 h-[38px] flex items-center justify-center text-sm shadow-sm transition" title="ดึงข้อมูลล่าสุดจากระบบ"><i class="fas fa-sync-alt"></i></button>
+                    </div>
+
                 </div>
 
                 <!-- พื้นที่วาดตารางสำหรับ Download -->
@@ -3085,7 +3339,7 @@
                                             innerHtml += `<div class="text-[10px] text-blue-700 mt-1">${displayTeacher}</div>`;
                                         }
                                         
-                                        if(settings.show_room && type === 'teacher') innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1">ห้อง: <span class="text-red-600">${slot['ห้องเรียน']}</span></div>`;
+                                        if(settings.show_room && type === 'teacher') innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${slot['ห้องเรียน']}</span></div>`;
                                         
                                         if(slot['สถานที่เรียน']) innerHtml += `<div class="text-[9px] text-gray-600 mt-0.5">${slot['สถานที่เรียน']}</div>`;
                                         
