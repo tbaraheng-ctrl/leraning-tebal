@@ -3906,16 +3906,6 @@
                         </div>
                         
                         <div style="clear: both;" class="page-break"></div>
-                        
-                        <!-- หน้า 2 เป็นต้นไป: บัญชีแนบท้ายแยกตามกลุ่มสาระและรายบุคคล -->
-                        <div style="text-align: center; font-size: 16pt; margin-bottom: 10px;">
-                            - ๒ -
-                        </div>
-                        
-                        <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 16pt; line-height: 1.5;">
-                            บัญชีแนบท้ายคำสั่ง${schoolName} ที่ ${toThaiNum(orderNumber)}<br>
-                            สรุปภาระงานสอน ภาคเรียนที่ ${toThaiNum(termInput)} ปีการศึกษา ${toThaiNum(yearInput)}
-                        </div>
                 `;
 
                 // จัดกลุ่มครูตามกลุ่มสาระการเรียนรู้
@@ -3982,7 +3972,38 @@
                     }
                 });
 
+                // --- ระบบจัดการเลขหน้าและขึ้นหน้าใหม่ ---
                 let groupIndex = 1;
+                let currentPageNum = 2;
+                let linesPerPage = 28; // จำนวนบรรทัดโดยประมาณต่อ 1 หน้ากระดาษ A4
+                let currentLineCount = 0;
+
+                const getPageHeader = (pageNum) => {
+                    let html = `
+                        <!-- เลขหน้า -->
+                        <div style="text-align: center; font-size: 16pt; margin-bottom: 10px; padding-top: 10px;">
+                            - ${toThaiNum(pageNum)} -
+                        </div>
+                    `;
+                    
+                    // หากเป็นหน้าแรกของบัญชีแนบท้าย (หน้า 2) จะมีหัวข้อเรื่อง
+                    if (pageNum === 2) {
+                        html += `
+                            <div style="text-align: center; font-weight: bold; margin-bottom: 20px; font-size: 16pt; line-height: 1.5;">
+                                บัญชีแนบท้ายคำสั่ง${schoolName} ที่ ${toThaiNum(orderNumber)}<br>
+                                สรุปภาระงานสอน ภาคเรียนที่ ${toThaiNum(termInput)} ปีการศึกษา ${toThaiNum(yearInput)}
+                            </div>
+                        `;
+                        currentLineCount = 6; // หักโควต้าบรรทัดสำหรับหัวข้อเรื่อง
+                    } else {
+                        currentLineCount = 2; // หักโควต้าสำหรับเลขหน้า
+                    }
+                    return html;
+                };
+
+                // สร้างหัวกระดาษหน้า 2
+                orderHtml += getPageHeader(currentPageNum);
+
                 // วนลูปสร้างตารางตามกลุ่มสาระ
                 subjectGroups.forEach(group => {
                     let groupTeachers = departments[group];
@@ -3990,9 +4011,31 @@
                     groupTeachers.sort((a, b) => a.name.localeCompare(b.name));
 
                     if (groupTeachers && groupTeachers.length > 0) {
+                        // เช็คว่าหัวข้อกลุ่มสาระจะล้นหน้ากระดาษไหม
+                        if (currentLineCount + 2 > linesPerPage) {
+                            orderHtml += `<div style="clear: both;" class="page-break"></div>`;
+                            currentPageNum++;
+                            orderHtml += getPageHeader(currentPageNum);
+                        }
+
                         orderHtml += `<div class="group-header">${toThaiNum(groupIndex)}. กลุ่มสาระการเรียนรู้${group}</div>`;
+                        currentLineCount += 2;
                         
                         groupTeachers.forEach((t, tIndex) => {
+                            let courseCount = t.courses.length > 0 ? t.courses.length : 1;
+                            let teacherLines = 5 + courseCount; // คำนวณความสูงของตารางครูท่านนี้ (บรรทัด)
+
+                            // เช็คว่าตารางครูคนนี้จะล้นหน้ากระดาษไหม หากล้นให้ปัดขึ้นหน้าใหม่
+                            if (currentLineCount + teacherLines > linesPerPage) {
+                                orderHtml += `<div style="clear: both;" class="page-break"></div>`;
+                                currentPageNum++;
+                                orderHtml += getPageHeader(currentPageNum);
+                                
+                                // เพิ่มชื่อกลุ่มสาระ (ต่อ) ให้รู้ว่ายังอยู่ในกลุ่มสาระเดิม
+                                orderHtml += `<div class="group-header" style="color: #555;">${toThaiNum(groupIndex)}. กลุ่มสาระการเรียนรู้${group} (ต่อ)</div>`;
+                                currentLineCount += 2;
+                            }
+
                             let teacherIndexStr = toThaiNum(groupIndex + '.' + (tIndex + 1));
                             orderHtml += `
                                 <div class="avoid-break">
@@ -4035,6 +4078,7 @@
                                     </table>
                                 </div>
                             `;
+                            currentLineCount += teacherLines; // บวกความสูงที่ใช้ไปสะสมไว้
                         });
                         groupIndex++;
                     }
