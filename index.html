@@ -606,21 +606,25 @@
             window.teacherDataList = teachers; 
             
             window.renderTeacherRows = (data) => {
-                tbody.innerHTML = data.map((t, idx) => `
+                tbody.innerHTML = data.map((t) => {
+                    let origIdx = window.teacherDataList.indexOf(t);
+                    return `
                     <tr class="border-b hover:bg-gray-50">
                         <td class="p-2 border">${t['ชื่อ-สกุล']}</td><td class="p-2 border">${t['กลุ่มสาระการเรียนรู้']}</td><td class="p-2 border">${t['บทบาท']}</td>
                         <td class="p-2 border text-center">
-                            <button onclick='editTeacher(${JSON.stringify(t)}, ${idx})' class="text-blue-600 hover:text-blue-800 mx-1"><i class="fas fa-edit"></i></button>
-                            <button onclick='deleteRow("ข้อมูลครู", ${idx})' class="text-red-600 hover:text-red-800 mx-1"><i class="fas fa-trash"></i></button>
+                            <button onclick='editTeacher(${origIdx})' class="text-blue-600 hover:text-blue-800 mx-1"><i class="fas fa-edit"></i></button>
+                            <button onclick='deleteRow("ข้อมูลครู", ${origIdx})' class="text-red-600 hover:text-red-800 mx-1"><i class="fas fa-trash"></i></button>
                         </td>
                     </tr>
-                `).join('');
+                    `;
+                }).join('');
             };
             window.renderTeacherRows(teachers);
 
             document.getElementById('teacherForm').onsubmit = async (e) => {
                 e.preventDefault();
-                const rowId = document.getElementById('t_id').value;
+                const rowIdStr = document.getElementById('t_id').value;
+                const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
                 const data = {
                     'ชื่อ-สกุล': document.getElementById('t_name').value,
                     'กลุ่มสาระการเรียนรู้': document.getElementById('t_group').value,
@@ -631,12 +635,13 @@
                 
                 closeTeacherModal();
                 showLoading(true);
-                let res = await callAPI('saveData', { sheetName: 'ข้อมูลครู', rowId: rowId !== "" ? parseInt(rowId) : null, data: data }, true);
+                let res = await callAPI('saveData', { sheetName: 'ข้อมูลครู', rowId: rowId, data: data }, true);
                 if(res) { 
-                    await getCachedData('ข้อมูลครู', true); 
+                    let newData = await getCachedData('ข้อมูลครู', true); 
+                    window.teacherDataList = newData;
+                    window.filterTeacherTable();
                     showLoading(false);
                     Swal.fire('สำเร็จ', 'บันทึกข้อมูลแล้ว', 'success'); 
-                    loadPage('teachers'); 
                 } else {
                     showLoading(false);
                 }
@@ -663,13 +668,14 @@
             Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลครูจากระบบแล้ว', timer: 1500, showConfirmButton: false});
         };
 
-        window.editTeacher = (data, idx) => {
+        window.editTeacher = (idx) => {
+            let data = window.teacherDataList[idx];
             document.getElementById('t_id').value = idx;
-            document.getElementById('t_name').value = data['ชื่อ-สกุล'];
-            document.getElementById('t_group').value = data['กลุ่มสาระการเรียนรู้'];
-            document.getElementById('t_role').value = data['บทบาท'];
-            document.getElementById('t_user').value = data['ชื่อผู้ใช้'];
-            document.getElementById('t_pass').value = data['รหัสผ่าน'];
+            document.getElementById('t_name').value = data['ชื่อ-สกุล'] || '';
+            document.getElementById('t_group').value = data['กลุ่มสาระการเรียนรู้'] || '';
+            document.getElementById('t_role').value = data['บทบาท'] || 'user';
+            document.getElementById('t_user').value = data['ชื่อผู้ใช้'] || '';
+            document.getElementById('t_pass').value = data['รหัสผ่าน'] || '';
             
             document.getElementById('teacherModalTitle').innerText = 'แก้ไขข้อมูลครู';
             document.getElementById('teacherModal').classList.remove('hidden');
@@ -683,14 +689,23 @@
 
         window.deleteRow = async (sheetName, rowIndex) => {
             if(await Swal.fire({title: 'ยืนยันการลบ?', text: "คุณไม่สามารถกู้คืนได้!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
+                showLoading(true);
                 let res = await callAPI('deleteData', { sheetName: sheetName, rowIndex: rowIndex });
                 if(res) {
-                    await getCachedData(sheetName, true); 
+                    let newData = await getCachedData(sheetName, true); 
+                    showLoading(false);
                     Swal.fire('ลบแล้ว!', '', 'success');
-                    if(sheetName === 'ข้อมูลครู') loadPage('teachers');
-                    if(sheetName === 'ข้อมูลรายวิชา') loadPage('courses');
-                    if(sheetName === 'ล๊อคตาราง') loadPage('lock');
-                    if(sheetName === 'กำหนดตารางสอน') loadPage('create_table');
+                    
+                    // Update UI without full page reload if possible
+                    if(sheetName === 'ข้อมูลครู' && window.teacherDataList) {
+                        window.teacherDataList = newData;
+                        if(window.filterTeacherTable) window.filterTeacherTable();
+                    } else if(sheetName === 'ข้อมูลรายวิชา' && window.courseDataList) {
+                        window.courseDataList = newData;
+                        if(window.filterCourseTable) window.filterCourseTable();
+                    }
+                } else {
+                    showLoading(false);
                 }
             }
         }
@@ -707,10 +722,17 @@
             let planOptions = learningPlans.map(p => `<option value="${p}">${p}</option>`).join('');
             let teacherOptions = teachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
 
+            window.pendingCourseSync = 0; // ตัวแปรสำหรับเช็คสถานะการบันทึกเบื้องหลัง
+
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative mb-6">
                     <div class="mb-4 flex justify-between items-center flex-wrap gap-2">
-                        <h3 class="text-lg font-bold text-navy">ตารางข้อมูลรายวิชา</h3>
+                        <div class="flex items-center gap-3">
+                            <h3 class="text-lg font-bold text-navy">ตารางข้อมูลรายวิชา</h3>
+                            <div id="courseSyncStatus" class="text-sm font-medium text-green-600 transition-all duration-300">
+                                <i class="fas fa-check-circle text-green-500"></i> ข้อมูลล่าสุด
+                            </div>
+                        </div>
                         <div class="flex items-center gap-2 flex-wrap">
                             <button onclick="openCourseModal()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 text-sm shadow transition hover:-translate-y-0.5"><i class="fas fa-plus mr-1"></i> เพิ่มรายวิชา</button>
                             <button type="button" onclick="document.getElementById('csvFileInput').click()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 shadow transition hover:-translate-y-0.5">
@@ -824,23 +846,46 @@
                 </div>
             `;
 
+            // กำหนด index ดั้งเดิมให้กับข้อมูลเพื่อใช้สำหรับ Background Sync
+            window.courseDataList = courses.map((c, index) => ({...c, originalIndex: index}));
+            window.filteredCourseList = window.courseDataList;
+            
             const tbody = container.querySelector('tbody');
-            window.courseDataList = courses;
-            window.filteredCourseList = courses;
             
             window.renderCourseRows = (data) => {
-                tbody.innerHTML = data.map((c, idx) => `
-                    <tr class="border-b hover:bg-gray-50">
+                tbody.innerHTML = data.map((c) => {
+                    let origIdx = c.originalIndex;
+                    let pendingClass = c.isPending ? 'opacity-50 bg-gray-100' : 'hover:bg-gray-50';
+                    return `
+                    <tr class="border-b ${pendingClass} transition-colors">
                         <td class="p-2 border">${c['รหัสวิชา']}</td><td class="p-2 border">${c['ชื่อวิชา']}</td><td class="p-2 border">${c['หน่วยกิต']}</td>
                         <td class="p-2 border">${c['ชื่อครูผู้สอน']}</td><td class="p-2 border">${c['ชั้นที่เปิดสอน']}</td><td class="p-2 border">${c['แผนการเรียน']}</td><td class="p-2 border">${c['กลุ่มสาระการเรียนรู้']}</td>
                         <td class="p-2 border text-center whitespace-nowrap">
-                            <button onclick='editCourse(${JSON.stringify(c)}, ${idx})' class="text-blue-600 hover:text-blue-800 mx-1"><i class="fas fa-edit"></i></button>
-                            <button onclick='deleteRow("ข้อมูลรายวิชา", ${idx})' class="text-red-600 hover:text-red-800 mx-1"><i class="fas fa-trash"></i></button>
+                            ${c.isPending ? 
+                                `<i class="fas fa-spinner fa-spin text-blue-600"></i>` :
+                                `<button onclick='editCourse(${origIdx})' class="text-blue-600 hover:text-blue-800 mx-1"><i class="fas fa-edit"></i></button>
+                                 <button onclick='deleteCourseRow(${origIdx})' class="text-red-600 hover:text-red-800 mx-1"><i class="fas fa-trash"></i></button>`
+                            }
                         </td>
                     </tr>
-                `).join('');
+                    `;
+                }).join('');
             };
-            window.renderCourseRows(courses);
+            window.renderCourseRows(window.filteredCourseList);
+
+            window.updateCourseSyncStatus = () => {
+                const statusEl = document.getElementById('courseSyncStatus');
+                if(!statusEl) return;
+                if(window.pendingCourseSync > 0) {
+                    statusEl.innerHTML = '<i class="fas fa-spinner fa-spin text-blue-500"></i> กำลังบันทึก (' + window.pendingCourseSync + ')...';
+                    statusEl.classList.remove('text-green-600');
+                    statusEl.classList.add('text-blue-600');
+                } else {
+                    statusEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i> ข้อมูลล่าสุด';
+                    statusEl.classList.remove('text-blue-600');
+                    statusEl.classList.add('text-green-600');
+                }
+            };
 
             window.openCourseModal = () => {
                 document.getElementById('courseForm').reset();
@@ -857,7 +902,7 @@
             window.refreshCourseTable = async () => {
                 showLoading(true);
                 let newCourses = await getCachedData('ข้อมูลรายวิชา', true);
-                window.courseDataList = newCourses;
+                window.courseDataList = newCourses.map((c, index) => ({...c, originalIndex: index}));
                 window.filterCourseTable();
                 showLoading(false);
                 Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลรายวิชาจากระบบแล้ว', timer: 1500, showConfirmButton: false});
@@ -911,9 +956,68 @@
                 document.getElementById('c_plan').value = '';
             };
 
+            const processCourseSave = (data, rowId) => {
+                // Optimistic UI Update
+                if (rowId !== null) {
+                    let index = window.courseDataList.findIndex(item => item.originalIndex === rowId);
+                    if(index !== -1) window.courseDataList[index] = { ...data, originalIndex: rowId, isPending: true };
+                } else {
+                    window.courseDataList.push({ ...data, originalIndex: 'temp_' + Date.now(), isPending: true });
+                }
+                window.filterCourseTable();
+
+                window.pendingCourseSync++;
+                window.updateCourseSyncStatus();
+
+                // Background API Call (no loader)
+                callAPI('saveData', { sheetName: 'ข้อมูลรายวิชา', rowId: rowId, data: data }, true)
+                .then(async (res) => {
+                    window.pendingCourseSync--;
+                    if(window.pendingCourseSync === 0) {
+                        let newData = await getCachedData('ข้อมูลรายวิชา', true, true);
+                        window.courseDataList = newData.map((c, index) => ({...c, originalIndex: index}));
+                        window.filterCourseTable();
+                    }
+                    window.updateCourseSyncStatus();
+                }).catch(err => {
+                    window.pendingCourseSync--;
+                    window.updateCourseSyncStatus();
+                    const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                    Toast.fire({ icon: 'error', title: 'บันทึกข้อมูลรายวิชาล้มเหลว' });
+                });
+            };
+
+            window.deleteCourseRow = async (rowIndex) => {
+                if(await Swal.fire({title: 'ยืนยันการลบ?', text: "คุณไม่สามารถกู้คืนได้!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
+                    // Optimistic UI update
+                    window.courseDataList = window.courseDataList.filter(item => item.originalIndex !== rowIndex);
+                    window.filterCourseTable();
+
+                    window.pendingCourseSync++;
+                    window.updateCourseSyncStatus();
+
+                    callAPI('deleteData', { sheetName: 'ข้อมูลรายวิชา', rowIndex: rowIndex }, true)
+                    .then(async (res) => {
+                        window.pendingCourseSync--;
+                        if(window.pendingCourseSync === 0) {
+                            let newData = await getCachedData('ข้อมูลรายวิชา', true, true);
+                            window.courseDataList = newData.map((c, index) => ({...c, originalIndex: index}));
+                            window.filterCourseTable();
+                        }
+                        window.updateCourseSyncStatus();
+                    }).catch(err => {
+                        window.pendingCourseSync--;
+                        window.updateCourseSyncStatus();
+                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
+                        Toast.fire({ icon: 'error', title: 'ลบข้อมูลล้มเหลว' });
+                    });
+                }
+            };
+
             document.getElementById('courseForm').onsubmit = async (e) => {
                 e.preventDefault();
-                const rowId = document.getElementById('c_id').value;
+                const rowIdStr = document.getElementById('c_id').value;
+                const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
                 const data = {
                     'รหัสวิชา': document.getElementById('c_code').value, 'ชื่อวิชา': document.getElementById('c_name').value,
                     'หน่วยกิต': document.getElementById('c_credit').value, 'ชื่อครูผู้สอน': document.getElementById('c_teacher').value,
@@ -922,23 +1026,34 @@
                 };
                 
                 closeCourseModal();
-                showLoading(true);
-                let res = await callAPI('saveData', { sheetName: 'ข้อมูลรายวิชา', rowId: rowId !== "" ? parseInt(rowId) : null, data: data }, true);
-                if(res) { 
-                    await getCachedData('ข้อมูลรายวิชา', true); 
-                    showLoading(false);
-                    Swal.fire('สำเร็จ', 'บันทึกข้อมูลแล้ว', 'success'); 
-                    loadPage('courses'); 
-                } else {
-                    showLoading(false);
-                }
+                processCourseSave(data, rowId);
             };
 
-            window.editCourse = (data, idx) => {
-                document.getElementById('c_id').value = idx;
-                ['c_code','c_name','c_credit','c_teacher','c_level','c_plan','c_term','c_group'].forEach((id, i) => {
-                    document.getElementById(id).value = data[Object.keys(data)[i]] || '';
-                });
+            window.editCourse = (origIdx) => {
+                let data = window.courseDataList.find(c => c.originalIndex === origIdx);
+                if(!data) return;
+                
+                document.getElementById('c_id').value = origIdx;
+                document.getElementById('c_code').value = String(data['รหัสวิชา'] || '').trim();
+                document.getElementById('c_name').value = String(data['ชื่อวิชา'] || '').trim();
+                document.getElementById('c_credit').value = String(data['หน่วยกิต'] || '').trim();
+                
+                // ดึงชื่อครูผู้สอน และเลือก Dropdown ให้ตรงกัน
+                let teacherName = String(data['ชื่อครูผู้สอน'] || '').trim();
+                let teacherSelect = document.getElementById('c_teacher');
+                teacherSelect.value = teacherName;
+                
+                // หากชื่อครูไม่มีในลิสต์ตัวเลือก (อาจถูกแก้ไขหรือลบไปแล้ว) ให้เพิ่มเข้าไปชั่วคราวเพื่อให้ฟอร์มแสดงผลครบ
+                if (teacherSelect.value !== teacherName && teacherName !== '') {
+                    teacherSelect.add(new Option(teacherName, teacherName));
+                    teacherSelect.value = teacherName;
+                }
+                
+                document.getElementById('c_term').value = String(data['ภาคเรียนที่'] || '').trim();
+                document.getElementById('c_group').value = String(data['กลุ่มสาระการเรียนรู้'] || '').trim();
+                document.getElementById('c_level').value = String(data['ชั้นที่เปิดสอน'] || '').trim();
+                document.getElementById('c_plan').value = String(data['แผนการเรียน'] || '').trim();
+                
                 document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); // เคลียร์ Checkbox
                 document.getElementById('courseModalTitle').innerText = 'แก้ไขข้อมูลรายวิชา';
                 document.getElementById('courseModal').classList.remove('hidden');
@@ -1054,13 +1169,14 @@
                     event.target.value = '';
 
                     // อัปเดตข้อมูลในตาราง
-                    await getCachedData('ข้อมูลรายวิชา', true);
+                    let newData = await getCachedData('ข้อมูลรายวิชา', true);
+                    window.courseDataList = newData;
+                    window.filterCourseTable();
                     Swal.fire({
                         title: 'นำเข้าสำเร็จ!', 
                         text: 'เพิ่มข้อมูลรายวิชาเรียบร้อยแล้ว ' + successCount + ' รายการ', 
                         icon: 'success'
                     });
-                    loadPage('courses'); 
                 };
                 reader.readAsText(file, 'UTF-8');
             };
