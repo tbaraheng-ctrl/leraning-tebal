@@ -154,23 +154,23 @@
         </main>
     </div>
 
-    <!-- Location Picker Modal (Global) -->
+    <!-- Location Picker Modal (Global) - ปรับขนาดให้กะทัดรัดขึ้น -->
     <div id="locationPickerModal" class="fixed inset-0 bg-black bg-opacity-60 z-[80] flex items-center justify-center hidden backdrop-blur-sm transition-opacity">
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden transform transition-all flex flex-col max-h-[85vh] m-4">
-            <div class="bg-navy text-white px-6 py-4 flex justify-between items-center shrink-0 border-b-4 border-gold">
-                <h3 class="font-bold text-lg flex items-center"><i class="fas fa-map-marker-alt text-gold mr-2"></i> เลือกสถานที่เรียน</h3>
-                <button onclick="closeLocationPicker()" class="text-gray-300 hover:text-white transition focus:outline-none bg-white bg-opacity-10 hover:bg-opacity-20 rounded-full w-8 h-8 flex items-center justify-center">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] md:max-w-5xl overflow-hidden transform transition-all flex flex-col max-h-[95vh] m-2">
+            <div class="bg-navy text-white px-4 py-3 flex justify-between items-center shrink-0 border-b-4 border-gold">
+                <h3 class="font-bold text-base flex items-center"><i class="fas fa-map-marker-alt text-gold mr-2"></i> เลือกสถานที่เรียน</h3>
+                <button onclick="closeLocationPicker()" class="text-gray-300 hover:text-white transition focus:outline-none bg-white bg-opacity-10 hover:bg-opacity-20 rounded-full w-7 h-7 flex items-center justify-center">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div class="p-6 overflow-y-auto bg-gray-50 flex-1" id="locationGridContainer">
+            <div class="p-3 md:p-4 overflow-y-auto bg-gray-50 flex-1" id="locationGridContainer">
                 <!-- Grid items injected here -->
             </div>
-            <div class="bg-white px-6 py-4 flex justify-between border-t border-gray-200 shrink-0">
-                 <button type="button" onclick="selectLocation('')" class="text-red-500 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-lg font-medium transition flex items-center">
-                    <i class="fas fa-eraser mr-2"></i> ล้างข้อมูล (ไม่ระบุ)
+            <div class="bg-white px-4 py-3 flex justify-between border-t border-gray-200 shrink-0">
+                 <button type="button" onclick="selectLocation('')" class="text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center">
+                    <i class="fas fa-eraser mr-2"></i> ล้าง (ไม่ระบุ)
                  </button>
-                 <button type="button" onclick="closeLocationPicker()" class="bg-navy text-white px-6 py-2 rounded-lg hover:bg-opacity-90 shadow-md transition">ปิดหน้าต่าง</button>
+                 <button type="button" onclick="closeLocationPicker()" class="bg-navy text-white px-4 py-1.5 rounded-lg hover:bg-opacity-90 text-sm shadow-md transition">ปิดหน้าต่าง</button>
             </div>
         </div>
     </div>
@@ -2031,6 +2031,10 @@
                     dlCode.innerHTML = '';
                     document.getElementById('sch_location').value = '';
                     window.baseLocationHtml = '<div class="col-span-full text-center text-gray-500 py-8 flex flex-col items-center"><i class="fas fa-exclamation-circle text-4xl text-gray-300 mb-3"></i><p>กรุณาระบุข้อมูล ระดับชั้น, แผน, วัน และ คาบเรียน ให้ครบถ้วนก่อน</p></div>';
+                    if(!existingData) {
+                        document.getElementById('sch_name').value = '';
+                        document.getElementById('sch_teacher').value = '';
+                    }
                     return;
                 }
 
@@ -2109,28 +2113,54 @@
                     }
                 }
 
-                let gridHtml = '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">';
+                let gridHtml = '';
                 if (allLocs.length === 0) {
                     gridHtml = '<div class="col-span-full text-center py-6 text-gray-500">ไม่มีข้อมูลสถานที่เรียนในระบบ (กรุณาเพิ่มในการตั้งค่า)</div>';
                 } else {
+                    let groupedLocs = {};
                     allLocs.forEach(loc => {
-                        let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
-                        if (busyLocations.has(loc) && !isEditingThisLoc) {
-                            gridHtml += `
-                                <button type="button" disabled class="p-3 bg-red-50 border border-red-200 rounded-xl text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[70px] shadow-sm relative overflow-hidden">
-                                    <span class="line-through z-10">${loc}</span>
-                                    <span class="text-[10px] mt-1 text-red-600 bg-red-100 px-2 py-0.5 rounded-full z-10">ไม่ว่าง</span>
-                                    <div class="absolute inset-0 bg-red-200 opacity-20"></div>
-                                </button>`;
-                        } else {
-                            gridHtml += `
-                                <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-3 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded-xl text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[70px] shadow-sm hover:shadow-md">
-                                    ${loc}
-                                </button>`;
+                        let cleanLoc = loc.trim();
+                        if (!cleanLoc) return;
+                        let firstChar = cleanLoc.charAt(0);
+                        let groupName = "ห้องปฏิบัติการ";
+                        if (/[0-9]/.test(firstChar)) {
+                            groupName = "อาคาร " + firstChar;
                         }
+                        if (!groupedLocs[groupName]) groupedLocs[groupName] = [];
+                        groupedLocs[groupName].push(cleanLoc);
                     });
+
+                    let groupKeys = Object.keys(groupedLocs).sort((a, b) => {
+                        if (a === "ห้องปฏิบัติการ") return 1;
+                        if (b === "ห้องปฏิบัติการ") return -1;
+                        return a.localeCompare(b);
+                    });
+
+                    gridHtml = '<div class="flex flex-wrap items-stretch justify-center gap-2.5 w-full">';
+                    groupKeys.forEach(gKey => {
+                        gridHtml += `<div class="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-[140px] flex flex-col">
+                            <h4 class="font-bold text-navy border-b border-gold pb-1 mb-2 text-center text-sm">${gKey}</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">`;
+                        
+                        groupedLocs[gKey].sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})).forEach(loc => {
+                            let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
+                            if (busyLocations.has(loc) && !isEditingThisLoc) {
+                                gridHtml += `
+                                    <button type="button" disabled class="p-1 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[36px] shadow-sm relative overflow-hidden">
+                                        <span class="line-through z-10 text-[11px] truncate w-full px-0.5 text-center leading-tight">${loc}</span>
+                                        <span class="text-[9px] mt-0.5 text-red-600 bg-red-100 px-1 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
+                                    </button>`;
+                            } else {
+                                gridHtml += `
+                                    <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-1 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[36px] shadow-sm hover:shadow-md text-[11px] truncate w-full px-0.5 text-center leading-tight">
+                                        ${loc}
+                                    </button>`;
+                            }
+                        });
+                        gridHtml += `</div></div>`;
+                    });
+                    gridHtml += '</div>';
                 }
-                gridHtml += '</div>';
                 window.baseLocationHtml = gridHtml;
                 
                 // คืนค่าถ้าเป็นการแก้ไข
@@ -2232,6 +2262,10 @@
                 const dayChks = Array.from(document.querySelectorAll('.sch-day-chk:checked')).map(c => c.value);
                 const periodChks = Array.from(document.querySelectorAll('.sch-period-chk:checked')).map(c => parseInt(c.value));
                 const locationVal = document.getElementById('sch_location').value.trim();
+                const room = document.getElementById('sch_room').value;
+                const plan = document.getElementById('sch_plan').value;
+                const code = document.getElementById('sch_code').value;
+                const teacher = document.getElementById('sch_teacher').value;
                 
                 // ตรวจสอบความครบถ้วนของข้อมูล
                 if (dayChks.length === 0) {
@@ -2242,10 +2276,80 @@
                     Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
                     return;
                 }
+                if (!code) {
+                    Swal.fire('แจ้งเตือน', 'กรุณาเลือกรหัสวิชา', 'warning');
+                    return;
+                }
                 if (!document.getElementById('sch_name').value) {
                     Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
                     return;
                 }
+
+                // --- ตรวจสอบข้อมูลชนกัน (Conflict Detection) ---
+                let conflictMsg = [];
+                let currentCourseCount = 0;
+
+                for (let i = 0; i < window.scheduleBaseData.length; i++) {
+                    let s = window.scheduleBaseData[i];
+                    if (rowId !== null && s.originalIndex === rowId) continue;
+
+                    if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
+                        currentCourseCount++;
+                    }
+                }
+
+                let courseInfo = window.courseLookup.find(c => String(c['รหัสวิชา'] || '').trim() === code);
+                if (courseInfo) {
+                    let credit = parseFloat(courseInfo['หน่วยกิต']) || 0;
+                    let maxPeriods = credit * 2;
+                    let requestedPeriods = dayChks.length * periodChks.length;
+                    if (maxPeriods > 0 && (currentCourseCount + requestedPeriods) > maxPeriods) {
+                        conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${requestedPeriods} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
+                    }
+                }
+
+                dayChks.forEach(d => {
+                    periodChks.forEach(p => {
+                        window.scheduleBaseData.forEach(slot => {
+                            if (rowId !== null && slot.originalIndex === rowId) return;
+
+                            if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
+                                let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                                let sLocation = String(slot['สถานที่เรียน'] || '').trim();
+                                let sRoom = String(slot['ห้องเรียน'] || '').trim();
+
+                                if (teacher !== '' && sTeacher === teacher) {
+                                    let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                    if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
+                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                    } else {
+                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                    }
+                                }
+                                
+                                if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
+                                    conflictMsg.push(`- วัน${d} คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
+                                }
+                                
+                                if (sRoom === room && slot['แผนการเรียน'] === plan) {
+                                    conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
+                                }
+                            }
+                        });
+                    });
+                });
+
+                if (conflictMsg.length > 0) {
+                    Swal.fire({
+                        title: 'พบข้อมูลชนกัน!',
+                        html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2">' + conflictMsg.join('<br>') + '</div>',
+                        icon: 'error',
+                        confirmButtonColor: '#1A2942',
+                        confirmButtonText: 'กลับไปแก้ไข'
+                    });
+                    return; 
+                }
+                // --- สิ้นสุดการตรวจสอบ ---
 
                 if (locationVal) {
                     let currentRooms = (settings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
@@ -2264,10 +2368,10 @@
                 dayChks.forEach(d => {
                     periodChks.forEach(p => {
                         const data = {
-                            'ห้องเรียน': document.getElementById('sch_room').value, 'แผนการเรียน': document.getElementById('sch_plan').value,
+                            'ห้องเรียน': room, 'แผนการเรียน': plan,
                             'วัน': d, 'คาบที่': p,
-                            'รหัสวิชา': document.getElementById('sch_code').value, 'ชื่อวิชา': document.getElementById('sch_name').value,
-                            'ชื่อครูผู้สอน': document.getElementById('sch_teacher').value, 'สถานที่เรียน': locationVal,
+                            'รหัสวิชา': code, 'ชื่อวิชา': document.getElementById('sch_name').value,
+                            'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': locationVal,
                             'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
                             'ผู้บันทึก': currentUser
                         };
@@ -2287,6 +2391,7 @@
                 const actVal = document.getElementById('t_sch_activity').value.trim();
                 const dayChks = Array.from(document.querySelectorAll('.t-sch-day-chk:checked')).map(c => c.value);
                 const periodChks = Array.from(document.querySelectorAll('.t-sch-period-chk:checked')).map(c => parseInt(c.value));
+                const teacher = document.getElementById('t_sch_teacher').value;
                 
                 if (dayChks.length === 0) {
                     Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกวันอย่างน้อย 1 วัน', 'warning');
@@ -2296,6 +2401,43 @@
                     Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
                     return;
                 }
+
+                // --- ตรวจสอบข้อมูลชนกัน (Conflict Detection) ---
+                let conflictMsg = [];
+
+                dayChks.forEach(d => {
+                    periodChks.forEach(p => {
+                        window.scheduleBaseData.forEach(slot => {
+                            if (rowId !== null && slot.originalIndex === rowId) return;
+
+                            if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
+                                let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                                let sRoom = String(slot['ห้องเรียน'] || '').trim();
+
+                                if (teacher !== '' && sTeacher === teacher) {
+                                    let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                    if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
+                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                    } else {
+                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                    }
+                                }
+                            }
+                        });
+                    });
+                });
+
+                if (conflictMsg.length > 0) {
+                    Swal.fire({
+                        title: 'พบข้อมูลชนกัน!',
+                        html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2">' + conflictMsg.join('<br>') + '</div>',
+                        icon: 'error',
+                        confirmButtonColor: '#1A2942',
+                        confirmButtonText: 'กลับไปแก้ไข'
+                    });
+                    return; 
+                }
+                // --- สิ้นสุดการตรวจสอบ ---
 
                 if (actVal && !window.allActivities.includes(actVal)) {
                     let currentCustom = (settings.teacher_activities || '').split(',').map(a=>a.trim()).filter(a=>a);
@@ -2315,7 +2457,7 @@
                             'ห้องเรียน': '-', 'แผนการเรียน': '-',
                             'วัน': d, 'คาบที่': p,
                             'รหัสวิชา': 'กิจกรรม', 'ชื่อวิชา': actVal,
-                            'ชื่อครูผู้สอน': document.getElementById('t_sch_teacher').value, 'สถานที่เรียน': '-',
+                            'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': '-',
                             'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
                             'ผู้บันทึก': currentUser
                         };
@@ -2968,6 +3110,10 @@
                     document.getElementById('dl_m_code').innerHTML = '';
                     document.getElementById('m_location').value = '';
                     window.modalLocationHtml = '<div class="col-span-full text-center text-gray-500 py-8 flex flex-col items-center"><i class="fas fa-exclamation-circle text-4xl text-gray-300 mb-3"></i><p>กรุณาระบุคาบเรียนให้ครบถ้วนก่อน</p></div>';
+                    if(!existingData) {
+                        document.getElementById('m_name').value = '';
+                        document.getElementById('m_teacher').value = '';
+                    }
                     return;
                 }
 
@@ -3048,28 +3194,54 @@
                     }
                 }
 
-                let gridHtml = '<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">';
+                let gridHtml = '';
                 if (allLocations.length === 0) {
                     gridHtml = '<div class="col-span-full text-center py-6 text-gray-500">ไม่มีข้อมูลสถานที่เรียนในระบบ (กรุณาเพิ่มในการตั้งค่า)</div>';
                 } else {
+                    let groupedLocs = {};
                     allLocations.forEach(loc => {
-                        let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
-                        if (busyLocations.has(loc) && !isEditingThisLoc) {
-                            gridHtml += `
-                                <button type="button" disabled class="p-3 bg-red-50 border border-red-200 rounded-xl text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[70px] shadow-sm relative overflow-hidden">
-                                    <span class="line-through z-10">${loc}</span>
-                                    <span class="text-[10px] mt-1 text-red-600 bg-red-100 px-2 py-0.5 rounded-full z-10">ไม่ว่าง</span>
-                                    <div class="absolute inset-0 bg-red-200 opacity-20"></div>
-                                </button>`;
-                        } else {
-                            gridHtml += `
-                                <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-3 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded-xl text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[70px] shadow-sm hover:shadow-md">
-                                    ${loc}
-                                </button>`;
+                        let cleanLoc = loc.trim();
+                        if (!cleanLoc) return;
+                        let firstChar = cleanLoc.charAt(0);
+                        let groupName = "ห้องปฏิบัติการ";
+                        if (/[0-9]/.test(firstChar)) {
+                            groupName = "อาคาร " + firstChar;
                         }
+                        if (!groupedLocs[groupName]) groupedLocs[groupName] = [];
+                        groupedLocs[groupName].push(cleanLoc);
                     });
+
+                    let groupKeys = Object.keys(groupedLocs).sort((a, b) => {
+                        if (a === "ห้องปฏิบัติการ") return 1;
+                        if (b === "ห้องปฏิบัติการ") return -1;
+                        return a.localeCompare(b);
+                    });
+
+                    gridHtml = '<div class="flex flex-wrap items-stretch justify-center gap-2.5 w-full">';
+                    groupKeys.forEach(gKey => {
+                        gridHtml += `<div class="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-[140px] flex flex-col">
+                            <h4 class="font-bold text-navy border-b border-gold pb-1 mb-2 text-center text-sm">${gKey}</h4>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">`;
+                        
+                        groupedLocs[gKey].sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})).forEach(loc => {
+                            let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
+                            if (busyLocations.has(loc) && !isEditingThisLoc) {
+                                gridHtml += `
+                                    <button type="button" disabled class="p-1 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[36px] shadow-sm relative overflow-hidden">
+                                        <span class="line-through z-10 text-[11px] truncate w-full px-0.5 text-center leading-tight">${loc}</span>
+                                        <span class="text-[9px] mt-0.5 text-red-600 bg-red-100 px-1 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
+                                    </button>`;
+                            } else {
+                                gridHtml += `
+                                    <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-1 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[36px] shadow-sm hover:shadow-md text-[11px] truncate w-full px-0.5 text-center leading-tight">
+                                        ${loc}
+                                    </button>`;
+                            }
+                        });
+                        gridHtml += `</div></div>`;
+                    });
+                    gridHtml += '</div>';
                 }
-                gridHtml += '</div>';
                 window.modalLocationHtml = gridHtml;
                 
                 // คืนค่าถ้าเป็นการแก้ไข
