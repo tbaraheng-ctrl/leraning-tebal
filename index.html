@@ -1890,9 +1890,8 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                                     <div>
                                         <label class="block text-gray-700 font-medium mb-1">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*ระบุข้อมูลด้านบนก่อน</span></label>
-                                        <select id="sch_code" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="autoFillCourse()">
-                                            <option value="">-- เลือกรหัสวิชา --</option>
-                                        </select>
+                                        <input type="text" id="sch_code" list="dl_sch_code" required autocomplete="off" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="autoFillCourse()" oninput="autoFillCourse()" placeholder="พิมพ์หรือเลือกรหัสวิชา...">
+                                        <datalist id="dl_sch_code"></datalist>
                                     </div>
                                     <div><label class="block text-gray-700 font-medium mb-1">ชื่อวิชา (อัตโนมัติ)</label><input type="text" id="sch_name" readonly class="w-full border rounded p-2 bg-gray-100 text-gray-600 cursor-not-allowed"></div>
                                 </div>
@@ -2025,17 +2024,13 @@
                 const plan = document.getElementById('sch_plan').value;
                 const dayChks = Array.from(document.querySelectorAll('.sch-day-chk:checked')).map(c => c.value);
                 const periodChks = Array.from(document.querySelectorAll('.sch-period-chk:checked')).map(c => parseInt(c.value));
-                const codeSelect = document.getElementById('sch_code');
+                const dlCode = document.getElementById('dl_sch_code');
 
                 // ถ้าระบุข้อมูลไม่ครบ ให้ปิดการใช้งานตัวเลือก
                 if (!room || !plan || dayChks.length === 0 || periodChks.length === 0) {
-                    codeSelect.innerHTML = '<option value="">-- กรุณาเลือกห้อง, แผน, วัน และคาบก่อน --</option>';
+                    dlCode.innerHTML = '';
                     document.getElementById('sch_location').value = '';
                     window.baseLocationHtml = '<div class="col-span-full text-center text-gray-500 py-8 flex flex-col items-center"><i class="fas fa-exclamation-circle text-4xl text-gray-300 mb-3"></i><p>กรุณาระบุข้อมูล ระดับชั้น, แผน, วัน และ คาบเรียน ให้ครบถ้วนก่อน</p></div>';
-                    if(!existingData) {
-                        document.getElementById('sch_name').value = '';
-                        document.getElementById('sch_teacher').value = '';
-                    }
                     return;
                 }
 
@@ -2073,8 +2068,7 @@
                         if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).trim());
                     }
                 });
-
-                let optionsHtml = '<option value="">-- เลือกรหัสวิชา --</option>';
+                let optionsHtml = '';
                 targetCourses.forEach(c => {
                     let code = String(c['รหัสวิชา'] || '').trim();
                     let name = String(c['ชื่อวิชา'] || '').trim();
@@ -2089,13 +2083,14 @@
 
                     if (remaining > 0 || isEditingThis) {
                         if (isBusy && !isEditingThis) {
-                            optionsHtml += `<option value="${code}" disabled class="text-red-500">${code} - ${name} (ครูติดสอน)</option>`;
+                            optionsHtml += `<option value="${code}" disabled>${code} - ${name} (ครูติดสอน)</option>`;
                         } else {
                             optionsHtml += `<option value="${code}">${code} - ${name} (เหลือ ${remaining} คาบ)</option>`;
                         }
                     }
                 });
-                codeSelect.innerHTML = optionsHtml;
+                dlCode.innerHTML = optionsHtml;
+                window.autoFillCourse(); // รีเฟรชข้อมูลวิชาเพื่อป้องกันข้อมูลหาย
 
                 // 2. ประมวลผลสถานที่เรียน (สร้างเป็น Grid HTML เก็บไว้ในตัวแปร)
                 let busyLocations = new Set();
@@ -2247,8 +2242,8 @@
                     Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
                     return;
                 }
-                if (!document.getElementById('sch_code').value) {
-                    Swal.fire('แจ้งเตือน', 'กรุณาเลือกรหัสวิชา', 'warning');
+                if (!document.getElementById('sch_name').value) {
+                    Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
                     return;
                 }
 
@@ -2438,7 +2433,7 @@
                 document.getElementById('sch_id').value = ''; 
                 document.querySelectorAll('.sch-day-chk').forEach(c => c.checked = false);
                 document.querySelectorAll('.sch-period-chk').forEach(c => c.checked = false);
-                document.getElementById('sch_code').innerHTML = '<option value="">-- เลือกรหัสวิชา --</option>'; // รีเซ็ตตัวเลือก
+                document.getElementById('dl_sch_code').innerHTML = ''; // รีเซ็ตตัวเลือก
                 document.getElementById('sch_location').value = ''; 
                 window.baseLocationHtml = '';
                 document.getElementById('sch_btn_save').innerText = 'บันทึก'; 
@@ -2634,9 +2629,8 @@
                             <div class="space-y-4 text-sm">
                                 <div>
                                     <label class="block mb-1 font-medium">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะวิชาที่เหลือคาบและครูว่าง</span></label>
-                                    <select id="m_code" required class="w-full border rounded p-2 focus:border-gold outline-none" onchange="autoFillModalCourse()">
-                                        <option value="">-- เลือกรหัสวิชา --</option>
-                                    </select>
+                                    <input type="text" id="m_code" list="dl_m_code" required autocomplete="off" class="w-full border rounded p-2 focus:border-gold outline-none" onchange="autoFillModalCourse()" oninput="autoFillModalCourse()" placeholder="พิมพ์หรือเลือกรหัสวิชา...">
+                                    <datalist id="dl_m_code"></datalist>
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">ชื่อวิชา</label>
@@ -2971,13 +2965,9 @@
                 const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
 
                 if(periodChks.length === 0) {
-                    document.getElementById('m_code').innerHTML = '<option value="">-- กรุณาเลือกคาบ --</option>';
+                    document.getElementById('dl_m_code').innerHTML = '';
                     document.getElementById('m_location').value = '';
                     window.modalLocationHtml = '<div class="col-span-full text-center text-gray-500 py-8 flex flex-col items-center"><i class="fas fa-exclamation-circle text-4xl text-gray-300 mb-3"></i><p>กรุณาระบุคาบเรียนให้ครบถ้วนก่อน</p></div>';
-                    if(!existingData) {
-                        document.getElementById('m_name').value = '';
-                        document.getElementById('m_teacher').value = '';
-                    }
                     return;
                 }
 
@@ -3014,8 +3004,7 @@
                         if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).trim());
                     }
                 });
-
-                let optionsHtml = '<option value="">-- เลือกรหัสวิชา --</option>';
+                let optionsHtml = '';
                 targetCourses.forEach(c => {
                     let code = String(c['รหัสวิชา'] || '').trim();
                     let name = String(c['ชื่อวิชา'] || '').trim();
@@ -3031,13 +3020,14 @@
                     // แสดงตัวเลือกก็ต่อเมื่อเหลือคาบ หรือเป็นวิชาที่กำลังแก้ไขอยู่
                     if (remaining > 0 || isEditingThis) {
                         if (isBusy && !isEditingThis) {
-                            optionsHtml += `<option value="${code}" disabled class="text-red-500">${code} - ${name} (ครูติดสอน)</option>`;
+                            optionsHtml += `<option value="${code}" disabled>${code} - ${name} (ครูติดสอน)</option>`;
                         } else {
                             optionsHtml += `<option value="${code}">${code} - ${name} (เหลือ ${remaining} คาบ)</option>`;
                         }
                     }
                 });
-                document.getElementById('m_code').innerHTML = optionsHtml;
+                document.getElementById('dl_m_code').innerHTML = optionsHtml;
+                window.autoFillModalCourse(); // รีเฟรชข้อมูลชื่อวิชาและครู
                 // ----------------------------------------------------
                 
                 // --- ประมวลผลตัวเลือกสถานที่เรียน (สร้าง Grid HTML) ---
