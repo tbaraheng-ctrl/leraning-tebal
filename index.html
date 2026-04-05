@@ -47,9 +47,9 @@
 <body class="font-sans text-gray-800 antialiased min-h-screen flex flex-col">
 
     <!-- Loading Overlay -->
-    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col justify-center items-center hidden">
+    <div id="loadingOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex flex-col justify-center items-center">
         <div class="loader mb-4"></div>
-        <p class="text-white font-semibold text-lg">กำลังประมวลผล...</p>
+        <p id="loadingText" class="text-white font-semibold text-lg">กำลังเตรียมระบบ...</p>
     </div>
 
     <!-- Login Page -->
@@ -247,6 +247,9 @@
                 document.getElementById('password').value = savedPass;
                 document.getElementById('rememberMe').checked = true;
             }
+            
+            // ซ่อนหน้าจอโหลดเมื่อเว็บไซต์โหลดและเตรียมการเสร็จสมบูรณ์
+            showLoading(false);
         };
 
         function togglePassword() {
@@ -261,8 +264,12 @@
             }
         }
 
-        function showLoading(show) {
-            document.getElementById('loadingOverlay').style.display = show ? 'flex' : 'none';
+        // ปรับปรุงฟังก์ชัน showLoading ให้สามารถเปลี่ยนข้อความได้
+        function showLoading(show, text = 'กำลังประมวลผล...') {
+            const overlay = document.getElementById('loadingOverlay');
+            const textEl = document.getElementById('loadingText');
+            if (textEl) textEl.innerText = text;
+            overlay.style.display = show ? 'flex' : 'none';
         }
 
         window.toggleSidebar = () => {
@@ -368,13 +375,15 @@
                 }
 
                 document.getElementById('displayUser').innerText = currentUser;
-                document.getElementById('displayRole').innerText = currentRole === 'admin' ? 'ผู้ดูแลระบบ' : 'ครูผู้สอน';
+                
+                let roleText = 'ครูผู้สอน';
+                if (currentRole === 'admin') roleText = 'ผู้ดูแลระบบ';
+                else if (currentRole === 'head') roleText = 'หัวหน้ากลุ่มสาระ';
+                document.getElementById('displayRole').innerText = roleText;
                 
                 document.getElementById('page-login').style.display = 'none';
                 document.getElementById('page-main').style.display = 'flex';
 
-                buildMenu();
-                
                 // --- พลังของเวอร์ชันนี้: โหลดข้อมูลล่วงหน้าแบบแอบทำหลังบ้าน ---
                 prefetchAllData();
                 // โหลดโลโก้, ชื่อโรงเรียน และแผนการเรียนที่ตั้งค่าไว้มาแสดงผล
@@ -389,7 +398,9 @@
                     }
                 });
 
-                loadPage(currentRole === 'admin' ? 'dashboard' : 'create_table');
+                // สร้างเมนูตามสิทธิ์การเข้าถึง (ต้องรอให้โหลดข้อมูลเสร็จก่อนสร้างเมนู)
+                await buildMenu();
+                loadPage('dashboard'); // ให้ทุกคนเข้าสู่หน้าแรก (Dashboard) เป็นหน้าเริ่มต้น
             } else {
                 Swal.fire('ล้มเหลว', 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง', 'error');
             }
@@ -407,25 +418,41 @@
         // NAVIGATION & RENDERING
         // ==========================================
         const pages = {
-            'dashboard': { title: 'หน้าแรก', icon: 'fa-home', roles: ['admin', 'user'], render: renderDashboard },
-            'profile': { title: 'ตั้งค่าบัญชี', icon: 'fa-user-cog', roles: ['admin', 'user'], render: renderProfile },
+            'dashboard': { title: 'หน้าแรก', icon: 'fa-home', roles: ['admin', 'head', 'user'], render: renderDashboard },
+            'profile': { title: 'ตั้งค่าบัญชี', icon: 'fa-user-cog', roles: ['admin', 'head', 'user'], render: renderProfile },
             'teachers': { title: 'จัดการข้อมูลครู', icon: 'fa-chalkboard-teacher', roles: ['admin'], render: renderTeachers },
-            'courses': { title: 'จัดการข้อมูลรายวิชา', icon: 'fa-book', roles: ['admin'], render: renderCourses },
+            'courses': { title: 'บันทึกอัตรากำลังรายวิชา', icon: 'fa-book', roles: ['admin', 'head'], render: renderCourses },
             'settings': { title: 'ตั้งค่ารูปแบบตาราง', icon: 'fa-cogs', roles: ['admin'], render: renderSettings },
             'permissions': { title: 'กำหนดสิทธิจัดตาราง', icon: 'fa-user-shield', roles: ['admin'], render: renderPermissions },
             'lock': { title: 'ล๊อครายวิชา', icon: 'fa-lock', roles: ['admin'], render: renderLock },
-            'create_table': { title: 'จัดทำตารางสอน', icon: 'fa-calendar-plus', roles: ['admin', 'user'], render: renderCreateTable },
+            'create_table': { title: 'จัดทำตารางสอน', icon: 'fa-calendar-plus', roles: ['admin', 'head', 'user'], render: renderCreateTable },
             'process': { title: 'ประมวลผลตารางสอน', icon: 'fa-microchip', roles: ['admin'], render: renderProcess },
-            'download': { title: 'ดาวน์โหลดตารางสอน', icon: 'fa-download', roles: ['admin', 'user'], render: renderDownload },
+            'download': { title: 'ดาวน์โหลดตารางสอน', icon: 'fa-download', roles: ['admin', 'head', 'user'], render: renderDownload },
             'orders': { title: 'ประมวลคำสั่งสอน', icon: 'fa-file-signature', roles: ['admin'], render: renderOrders }
         };
 
-        function buildMenu() {
+        async function buildMenu() {
+            let settingsArr = await getCachedData('การตั้งค่า');
+            let settings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {};
+            
+            // ดึงค่าการตั้งค่าเปิด/ปิดเมนู
+            let showCourses = settings.menu_courses !== false;
+            let showCreate = settings.menu_create !== false;
+            let showDownload = settings.menu_download !== false;
+
             const menu = document.getElementById('navMenu');
             menu.innerHTML = '';
             for (const [key, page] of Object.entries(pages)) {
                 if (page.roles.includes(currentRole)) {
-                    // ปรับ href เป็น javascript:void(0) เพื่อป้องกันเบราว์เซอร์รีเฟรชหรือกระตุกหน้าจอ
+                    
+                    // ตรวจสอบเงื่อนไขการเปิด/ปิดเมนู (มีผลกับทุกคน)
+                    let isVisible = true;
+                    if (key === 'courses' && !showCourses) isVisible = false;
+                    if (key === 'create_table' && !showCreate) isVisible = false;
+                    if (key === 'download' && !showDownload) isVisible = false;
+
+                    if (!isVisible) continue;
+
                     menu.innerHTML += `
                         <li>
                             <a href="javascript:void(0)" onclick="loadPage('${key}')" class="flex items-center px-6 py-3 text-gray-300 hover:bg-gold hover:text-navy transition-colors nav-link" data-page="${key}">
@@ -450,7 +477,6 @@
             div.id = 'pageContent';
             contentArea.appendChild(div);
 
-            // แสดง Loader ครอบไว้ตอนเรนเดอร์ ถ้ามีแคชแล้วมันจะหายไปทันทีแบบพริบตาเดียว!
             showLoading(true);
             try {
                 await pages[pageKey].render(div);
@@ -472,39 +498,40 @@
         // PAGE RENDERERS (Core Logic)
         // ==========================================
 
-        function renderDashboard(container) {
-            // ดึงโลโก้และชื่อโรงเรียนจากแคช (ถ้ามี)
+        async function renderDashboard(container) {
+            // ดึงโลโก้และชื่อโรงเรียนและตั้งค่าปุ่มจากแคช
             let logoUrl = 'https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png';
             let schoolName = 'โรงเรียนนราสิกขาลัย';
-            if (cachePromises['การตั้งค่า']) {
-                cachePromises['การตั้งค่า'].then(arr => {
-                    if(arr.length > 0) {
-                        let s = JSON.parse(arr[0]['JSON_DATA'] || '{}');
-                        if(s.logo) {
-                            let img = container.querySelector('.app-logo');
-                            if(img) img.src = s.logo;
-                        }
-                        if(s.school_name) {
-                            schoolName = s.school_name;
-                            let nameEls = container.querySelectorAll('.app-school-name');
-                            nameEls.forEach(el => el.innerText = schoolName);
-                        }
-                    }
-                });
-            }
+            let settingsArr = await getCachedData('การตั้งค่า');
+            let settings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {};
+            
+            if(settings.logo) logoUrl = settings.logo;
+            if(settings.school_name) schoolName = settings.school_name;
+
+            let showCourses = settings.menu_courses !== false;
+            let showCreate = settings.menu_create !== false;
+            let showDownload = settings.menu_download !== false;
 
             // สร้างปุ่มเมนูตามสิทธิ์การใช้งาน
             let menuCards = '';
             for (const [key, page] of Object.entries(pages)) {
                 if (key !== 'dashboard' && page.roles.includes(currentRole)) {
-                    menuCards += `
-                        <button onclick="loadPage('${key}')" class="bg-white p-6 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 hover:border-gold border-2 border-transparent transition-all duration-300 flex flex-col items-center justify-center gap-4 text-navy group">
-                            <div class="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-2xl group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
-                                <i class="fas ${page.icon}"></i>
-                            </div>
-                            <span class="font-semibold text-center leading-tight">${page.title}</span>
-                        </button>
-                    `;
+                    
+                    let isVisible = true;
+                    if (key === 'courses' && !showCourses) isVisible = false;
+                    if (key === 'create_table' && !showCreate) isVisible = false;
+                    if (key === 'download' && !showDownload) isVisible = false;
+
+                    if (isVisible) {
+                        menuCards += `
+                            <button onclick="loadPage('${key}')" class="bg-white p-6 rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 hover:border-gold border-2 border-transparent transition-all duration-300 flex flex-col items-center justify-center gap-4 text-navy group">
+                                <div class="w-16 h-16 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-2xl group-hover:bg-navy group-hover:text-gold transition-colors duration-300">
+                                    <i class="fas ${page.icon}"></i>
+                                </div>
+                                <span class="font-semibold text-center leading-tight">${page.title}</span>
+                            </button>
+                        `;
+                    }
                 }
             }
 
@@ -643,7 +670,14 @@
                             <input type="hidden" id="t_id">
                             <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1">ชื่อ-สกุล</label><input type="text" id="t_name" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
                             <div><label class="block text-sm font-medium mb-1">กลุ่มสาระ</label><select id="t_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${groupOptions}</select></div>
-                            <div><label class="block text-sm font-medium mb-1">บทบาท</label><select id="t_role" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="user">User (ครู)</option><option value="admin">Admin (ผู้ดูแล)</option></select></div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">บทบาท</label>
+                                <select id="t_role" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
+                                    <option value="user">User (ครูผู้สอน)</option>
+                                    <option value="head">Head (หัวหน้ากลุ่มสาระ)</option>
+                                    <option value="admin">Admin (ผู้ดูแลระบบ)</option>
+                                </select>
+                            </div>
                             <div><label class="block text-sm font-medium mb-1">ชื่อผู้ใช้</label><input type="text" id="t_user" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
                             <div><label class="block text-sm font-medium mb-1">รหัสผ่าน</label><input type="text" id="t_pass" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
                             
@@ -700,95 +734,101 @@
                     showLoading(false);
                 }
             };
-        }
 
-        window.openTeacherModal = () => {
-            document.getElementById('teacherForm').reset();
-            document.getElementById('t_id').value = '';
-            document.getElementById('teacherModalTitle').innerText = 'เพิ่มข้อมูลครู';
-            document.getElementById('teacherModal').classList.remove('hidden');
-        };
+            window.openTeacherModal = () => {
+                document.getElementById('teacherForm').reset();
+                document.getElementById('t_id').value = '';
+                document.getElementById('teacherModalTitle').innerText = 'เพิ่มข้อมูลครู';
+                document.getElementById('teacherModal').classList.remove('hidden');
+            };
 
-        window.closeTeacherModal = () => {
-            document.getElementById('teacherModal').classList.add('hidden');
-        };
+            window.closeTeacherModal = () => {
+                document.getElementById('teacherModal').classList.add('hidden');
+            };
 
-        window.refreshTeacherTable = async () => {
-            showLoading(true);
-            let newTeachers = await getCachedData('ข้อมูลครู', true);
-            window.teacherDataList = newTeachers;
-            window.filterTeacherTable();
-            showLoading(false);
-            Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลครูจากระบบแล้ว', timer: 1500, showConfirmButton: false});
-        };
-
-        window.editTeacher = (idx) => {
-            let data = window.teacherDataList[idx];
-            document.getElementById('t_id').value = idx;
-            document.getElementById('t_name').value = data['ชื่อ-สกุล'] || '';
-            document.getElementById('t_group').value = data['กลุ่มสาระการเรียนรู้'] || '';
-            document.getElementById('t_role').value = data['บทบาท'] || 'user';
-            document.getElementById('t_user').value = data['ชื่อผู้ใช้'] || '';
-            document.getElementById('t_pass').value = data['รหัสผ่าน'] || '';
-            
-            document.getElementById('teacherModalTitle').innerText = 'แก้ไขข้อมูลครู';
-            document.getElementById('teacherModal').classList.remove('hidden');
-        }
-
-        window.filterTeacherTable = () => {
-            const filter = document.getElementById('filter_t_group').value;
-            const filtered = filter === 'all' ? window.teacherDataList : window.teacherDataList.filter(t => t['กลุ่มสาระการเรียนรู้'] === filter);
-            window.renderTeacherRows(filtered);
-        }
-
-        window.deleteRow = async (sheetName, rowIndex) => {
-            if(await Swal.fire({title: 'ยืนยันการลบ?', text: "คุณไม่สามารถกู้คืนได้!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
+            window.refreshTeacherTable = async () => {
                 showLoading(true);
-                let res = await callAPI('deleteData', { sheetName: sheetName, rowIndex: rowIndex });
-                if(res) {
-                    let newData = await getCachedData(sheetName, true); 
-                    showLoading(false);
-                    Swal.fire('ลบแล้ว!', '', 'success');
-                    
-                    // Update UI without full page reload if possible
-                    if(sheetName === 'ข้อมูลครู' && window.teacherDataList) {
-                        window.teacherDataList = newData;
-                        if(window.filterTeacherTable) window.filterTeacherTable();
-                    } else if(sheetName === 'ข้อมูลรายวิชา' && window.courseDataList) {
-                        window.courseDataList = newData;
-                        if(window.filterCourseTable) window.filterCourseTable();
-                    }
-                } else {
-                    showLoading(false);
-                }
+                let newTeachers = await getCachedData('ข้อมูลครู', true);
+                window.teacherDataList = newTeachers;
+                window.filterTeacherTable();
+                showLoading(false);
+                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลครูจากระบบแล้ว', timer: 1500, showConfirmButton: false});
+            };
+
+            window.editTeacher = (idx) => {
+                let data = window.teacherDataList[idx];
+                document.getElementById('t_id').value = idx;
+                document.getElementById('t_name').value = data['ชื่อ-สกุล'] || '';
+                document.getElementById('t_group').value = data['กลุ่มสาระการเรียนรู้'] || '';
+                document.getElementById('t_role').value = data['บทบาท'] || 'user';
+                document.getElementById('t_user').value = data['ชื่อผู้ใช้'] || '';
+                document.getElementById('t_pass').value = data['รหัสผ่าน'] || '';
+                
+                document.getElementById('teacherModalTitle').innerText = 'แก้ไขข้อมูลครู';
+                document.getElementById('teacherModal').classList.remove('hidden');
             }
+
+            window.filterTeacherTable = () => {
+                const filter = document.getElementById('filter_t_group').value;
+                const filtered = filter === 'all' ? window.teacherDataList : window.teacherDataList.filter(t => t['กลุ่มสาระการเรียนรู้'] === filter);
+                window.renderTeacherRows(filtered);
+            }
+
+            window.deleteRow = async (sheetName, rowIndex) => {
+                if(await Swal.fire({title: 'ยืนยันการลบ?', text: "คุณไม่สามารถกู้คืนได้!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
+                    showLoading(true);
+                    let res = await callAPI('deleteData', { sheetName: sheetName, rowIndex: rowIndex });
+                    if(res) {
+                        let newData = await getCachedData(sheetName, true); 
+                        showLoading(false);
+                        Swal.fire('ลบแล้ว!', '', 'success');
+                        
+                        // Update UI without full page reload if possible
+                        if(sheetName === 'ข้อมูลครู' && window.teacherDataList) {
+                            window.teacherDataList = newData;
+                            if(window.filterTeacherTable) window.filterTeacherTable();
+                        } else if(sheetName === 'ข้อมูลรายวิชา' && window.courseDataList) {
+                            window.courseDataList = newData;
+                            if(window.filterCourseTable) window.filterCourseTable();
+                        }
+                    } else {
+                        showLoading(false);
+                    }
+                }
+            };
         }
 
-        // --- 2. จัดการข้อมูลรายวิชา ---
+        // --- 2. บันทึกอัตรากำลังรายวิชา (ปรับปรุงแบบ Batch Add) ---
         async function renderCourses(container) {
-            // โหลด 2 ชีทพร้อมกันแบบขนาน (Parallel Loading) ช่วยลดเวลาได้ 2 เท่า
-            let [courses, teachers] = await Promise.all([
+            let [courses, teachers, settingsArr] = await Promise.all([
                 getCachedData('ข้อมูลรายวิชา'),
-                getCachedData('ข้อมูลครู')
+                getCachedData('ข้อมูลครู'),
+                getCachedData('การตั้งค่า')
             ]);
             
+            let settings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {};
+            
+            // เก็บภาคเรียนปัจจุบันไว้เป็น Global Variable เพื่อให้เรียกใช้จาก Modal ได้อย่างปลอดภัย
+            window.courseCurrentTerm = settings.term || '1'; 
+            let currentTerm = window.courseCurrentTerm;
+            
             let groupOptions = subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('');
-            let planOptions = learningPlans.map(p => `<option value="${p}">${p}</option>`).join('');
             let teacherOptions = teachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
 
-            window.pendingCourseSync = 0; // ตัวแปรสำหรับเช็คสถานะการบันทึกเบื้องหลัง
+            window.pendingCourseSync = 0; 
+            window.tempCourseList = []; // เก็บข้อมูลวิชาชั่วคราวก่อนกดบันทึกทั้งหมด
 
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative mb-6">
                     <div class="mb-4 flex justify-between items-center flex-wrap gap-2">
                         <div class="flex items-center gap-3">
-                            <h3 class="text-lg font-bold text-navy">ตารางข้อมูลรายวิชา</h3>
+                            <h3 class="text-lg font-bold text-navy">ตารางอัตรากำลังรายวิชา</h3>
                             <div id="courseSyncStatus" class="text-sm font-medium text-green-600 transition-all duration-300">
                                 <i class="fas fa-check-circle text-green-500"></i> ข้อมูลล่าสุด
                             </div>
                         </div>
                         <div class="flex items-center gap-2 flex-wrap">
-                            <button onclick="openCourseModal()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 text-sm shadow transition hover:-translate-y-0.5"><i class="fas fa-plus mr-1"></i> เพิ่มรายวิชา</button>
+                            <button onclick="openCourseModal()" class="bg-navy text-white px-4 py-2 rounded hover:bg-opacity-90 text-sm shadow transition hover:-translate-y-0.5"><i class="fas fa-plus mr-1"></i> เพิ่มรายการ</button>
                             <button type="button" onclick="document.getElementById('csvFileInput').click()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 shadow transition hover:-translate-y-0.5">
                                 <i class="fas fa-file-import mr-1"></i> นำเข้า CSV
                             </button>
@@ -796,8 +836,8 @@
                             
                             <select id="filter_c_term" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
                                 <option value="all">ทุกภาคเรียน</option>
-                                <option value="1">ภาคเรียนที่ 1</option>
-                                <option value="2">ภาคเรียนที่ 2</option>
+                                <option value="1" ${currentTerm == '1' ? 'selected' : ''}>ภาคเรียนที่ 1</option>
+                                <option value="2" ${currentTerm == '2' ? 'selected' : ''}>ภาคเรียนที่ 2</option>
                             </select>
                             <select id="filter_c_grade" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
                                 <option value="all">ทุกระดับชั้น</option>
@@ -808,8 +848,11 @@
                                 <option value="ม.5">ม.5</option>
                                 <option value="ม.6">ม.6</option>
                             </select>
-                            <select id="filter_c_group" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
+                            <select id="filter_c_group" class="border rounded p-2 text-sm" onchange="updateFilterTeacherList()">
                                 <option value="all">ทุกกลุ่มสาระ</option>${groupOptions}
+                            </select>
+                            <select id="filter_c_teacher" class="border rounded p-2 text-sm" onchange="filterCourseTable()">
+                                <option value="all">ทุกครูผู้สอน</option>${teacherOptions}
                             </select>
                         </div>
                     </div>
@@ -829,31 +872,34 @@
                     </table>
                 </div>
 
-                <!-- ป๊อปอัพฟอร์มข้อมูลรายวิชา -->
+                <!-- ป๊อปอัพฟอร์มข้อมูลรายวิชา (แบบใหม่ Batch Add) -->
                 <div id="courseModal" class="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center hidden">
-                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden transform transition-all max-h-[90vh] flex flex-col">
+                    <div class="bg-white rounded-xl shadow-2xl w-full max-w-4xl overflow-hidden transform transition-all max-h-[95vh] flex flex-col">
                         <div class="bg-navy text-white px-6 py-4 flex justify-between items-center shrink-0">
-                            <h3 class="font-bold text-lg" id="courseModalTitle">เพิ่มข้อมูลรายวิชา</h3>
+                            <h3 class="font-bold text-lg" id="courseModalTitle">เพิ่มอัตรากำลังรายวิชา</h3>
                             <button onclick="closeCourseModal()" class="text-gray-300 hover:text-white focus:outline-none">
                                 <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
                         <div class="p-6 overflow-y-auto">
-                            <form id="courseForm" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <form id="courseForm" class="text-sm">
                                 <input type="hidden" id="c_id">
-                                <!-- แถวที่ 1 -->
-                                <div><label class="block font-medium mb-1">รหัสวิชา</label><input type="text" id="c_code" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
-                                <div><label class="block font-medium mb-1">ชื่อวิชา</label><input type="text" id="c_name" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
-                                <!-- แถวที่ 2 -->
-                                <div><label class="block font-medium mb-1">หน่วยกิต</label><input type="number" step="0.5" id="c_credit" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
-                                <div><label class="block font-medium mb-1">ชื่อครูผู้สอน</label><select id="c_teacher" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptions}</select></div>
-                                <!-- แถวที่ 3 -->
-                                <div><label class="block font-medium mb-1">ภาคเรียนที่</label><select id="c_term" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="1">1</option><option value="2">2</option></select></div>
-                                <div><label class="block font-medium mb-1">กลุ่มสาระ</label><select id="c_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${groupOptions}</select></div>
+                                <input type="hidden" id="c_edit_mode" value="false">
                                 
-                                <!-- แถวที่ 4 (เต็มความกว้าง) -->
-                                <div class="md:col-span-2 bg-gray-50 p-4 rounded border border-gray-200">
-                                    <label class="block font-medium mb-2">ชั้นที่เปิดสอน <span class="text-xs text-gray-500 font-normal">(เลือกระดับชั้น ติ๊กห้องที่ต้องการ แล้วกดเพิ่ม)</span></label>
+                                <!-- ข้อมูลหลักและรายวิชา (จัดเรียงแถวละ 3 ฟอร์ม) -->
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                    <div><label class="block font-medium mb-1">ภาคเรียนที่</label><select id="c_term" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="1">1</option><option value="2">2</option></select></div>
+                                    <div><label class="block font-medium mb-1">กลุ่มสาระ</label><select id="c_group" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateModalTeacherList()"><option value="">เลือก...</option>${groupOptions}</select></div>
+                                    <div><label class="block font-medium mb-1">ชื่อครูผู้สอน</label><select id="c_teacher" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptions}</select></div>
+                                    
+                                    <div><label class="block font-medium mb-1">รหัสวิชา</label><input type="text" id="c_code" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                    <div><label class="block font-medium mb-1">ชื่อวิชา</label><input type="text" id="c_name" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                    <div><label class="block font-medium mb-1">หน่วยกิต</label><input type="number" step="0.5" id="c_credit" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                </div>
+                                
+                                <!-- แถวถัดไป: ชั้น/ห้องที่สอน -->
+                                <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-4">
+                                    <label class="block font-medium mb-2">ชั้นที่สอน <span class="text-xs text-gray-500 font-normal">(เลือกระดับชั้น ติ๊กห้องที่ต้องการ แล้วกดเพิ่ม)</span></label>
                                     <div class="flex flex-col gap-3 mb-3">
                                         <div class="flex items-center gap-2 flex-wrap">
                                             <span class="font-medium text-gray-700">ระดับชั้น:</span>
@@ -873,26 +919,50 @@
                                             `).join('')}
                                         </div>
                                     </div>
-                                    <input type="text" id="c_level" required class="w-full border border-gray-300 rounded p-2 text-sm focus:border-gold outline-none" placeholder="เช่น ม.1/1, ม.1/2">
+                                    <input type="text" id="c_level" class="w-full border border-gray-300 rounded p-2 text-sm focus:border-gold outline-none" placeholder="เช่น ม.1/1, ม.1/2">
                                 </div>
 
-                                <!-- แถวที่ 5 (เต็มความกว้าง) -->
-                                <div class="md:col-span-2 bg-gray-50 p-4 rounded border border-gray-200">
-                                    <label class="block font-medium mb-2">แผนการเรียน <span class="text-xs text-gray-500 font-normal">(เลือกแล้วกดเพิ่ม หรือพิมพ์เองโดยคั่นด้วยลูกน้ำ)</span></label>
-                                    <div class="flex gap-2 mb-2">
-                                        <select id="c_plan_sel" class="border border-gray-300 rounded p-2 text-sm flex-1 focus:border-gold outline-none">
-                                            <option value="">-- เลือกแผนการเรียน --</option>
-                                            ${planOptions}
-                                        </select>
-                                        <button type="button" onclick="addCoursePlan()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 shadow-sm whitespace-nowrap" title="เพิ่ม"><i class="fas fa-plus"></i> เพิ่ม</button>
-                                        <button type="button" onclick="clearCoursePlan()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 shadow-sm whitespace-nowrap" title="ล้าง"><i class="fas fa-trash"></i></button>
+                                <!-- แถวที่ 4: แผนการเรียน (เปลี่ยนเป็น Checkbox) -->
+                                <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-4">
+                                    <label class="block font-medium mb-2">แผนการเรียน <span class="text-xs text-gray-500 font-normal">(ติ๊กเลือกได้มากกว่า 1 แผน)</span></label>
+                                    <div class="flex flex-wrap gap-3" id="m_plan_checkbox_container">
+                                        ${learningPlans.map((p) => `
+                                            <label class="flex items-center space-x-2 cursor-pointer bg-white px-3 py-1.5 rounded border border-gray-300 hover:bg-gray-100 transition text-sm shadow-sm">
+                                                <input type="checkbox" value="${p}" class="modal-plan-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                                                <span class="text-navy">${p}</span>
+                                            </label>
+                                        `).join('')}
                                     </div>
-                                    <input type="text" id="c_plan" required class="w-full border border-gray-300 rounded p-2 text-sm focus:border-gold outline-none" placeholder="เช่น วิทย์-คณิต, ทั่วไป">
                                 </div>
                                 
-                                <div class="md:col-span-2 mt-4 flex justify-end space-x-2 border-t pt-4">
-                                    <button type="button" onclick="closeCourseModal()" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">ยกเลิก</button>
-                                    <button type="submit" id="c_btn_save" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึก</button>
+                                <!-- ปุ่มเพิ่มลงตารางชั่วคราว -->
+                                <div class="flex justify-end space-x-2 mt-2" id="batch_add_controls">
+                                    <button type="button" onclick="addCourseToTemp()" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 shadow-md transition"><i class="fas fa-plus mr-1"></i> เพิ่มลงรายการด้านล่าง</button>
+                                </div>
+
+                                <!-- ตารางแสดงข้อมูลที่พักไว้เตรียมบันทึก -->
+                                <div id="temp_table_container" class="mt-6 border-t pt-4">
+                                    <h4 class="font-bold text-navy mb-2 flex items-center justify-between">
+                                        <span><i class="fas fa-list-ul text-gold mr-1"></i> รายการเตรียมบันทึก <span id="tempCount" class="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded-full ml-1">0</span></span>
+                                        <button type="button" onclick="clearTempCourses()" class="text-xs text-red-500 hover:text-red-700 underline font-normal"><i class="fas fa-trash-alt"></i> ล้างทั้งหมด</button>
+                                    </h4>
+                                    <div class="overflow-x-auto max-h-48 border border-gray-200 rounded">
+                                        <table class="w-full text-xs text-left border-collapse">
+                                            <thead class="bg-gray-100 text-gray-700 sticky top-0">
+                                                <tr><th class="p-2 border-b">รหัส</th><th class="p-2 border-b">ชื่อวิชา</th><th class="p-2 border-b">กิต</th><th class="p-2 border-b">ชั้น</th><th class="p-2 border-b">แผน</th><th class="p-2 border-b text-center">จัดการ</th></tr>
+                                            </thead>
+                                            <tbody id="tempCourseTbody">
+                                                <tr><td colspan="6" class="p-4 text-center text-gray-400 italic">ยังไม่มีรายการ กรอกข้อมูลด้านบนแล้วกด "เพิ่มลงรายการด้านล่าง"</td></tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- ปุ่มทำงานหลักของฟอร์ม -->
+                                <div class="mt-6 flex justify-end space-x-2 border-t pt-4">
+                                    <button type="button" onclick="closeCourseModal()" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">ปิดหน้าต่าง</button>
+                                    <button type="button" id="btn_save_edit" onclick="saveEditedCourse()" class="bg-gold text-navy font-bold px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md hidden">บันทึกการแก้ไข</button>
+                                    <button type="button" id="btn_save_batch" onclick="saveBatchCourses()" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึกข้อมูลเข้าสู่ระบบ</button>
                                 </div>
                             </form>
                         </div>
@@ -903,8 +973,10 @@
             // กำหนด index ดั้งเดิมให้กับข้อมูลเพื่อใช้สำหรับ Background Sync
             window.courseDataList = courses.map((c, index) => ({...c, originalIndex: index}));
             window.filteredCourseList = window.courseDataList;
+            window.allTeachersList = teachers;
+            window.tempCourseList = []; // Array สำหรับเก็บข้อมูลการเพิ่มหลายรายการ
             
-            const tbody = container.querySelector('tbody');
+            const tbody = container.querySelector('#courseTable tbody');
             
             window.renderCourseRows = (data) => {
                 tbody.innerHTML = data.map((c) => {
@@ -913,7 +985,7 @@
                     return `
                     <tr class="border-b ${pendingClass} transition-colors">
                         <td class="p-2 border">${c['รหัสวิชา']}</td><td class="p-2 border">${c['ชื่อวิชา']}</td><td class="p-2 border">${c['หน่วยกิต']}</td>
-                        <td class="p-2 border">${c['ชื่อครูผู้สอน']}</td><td class="p-2 border">${c['ชั้นที่เปิดสอน']}</td><td class="p-2 border">${c['แผนการเรียน']}</td><td class="p-2 border">${c['กลุ่มสาระการเรียนรู้']}</td>
+                        <td class="p-2 border">${c['ชื่อครูผู้สอน']}</td><td class="p-2 border">${c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || ''}</td><td class="p-2 border">${c['แผนการเรียน']}</td><td class="p-2 border">${c['กลุ่มสาระการเรียนรู้']}</td>
                         <td class="p-2 border text-center whitespace-nowrap">
                             ${c.isPending ? 
                                 `<i class="fas fa-spinner fa-spin text-blue-600"></i>` :
@@ -941,11 +1013,26 @@
                 }
             };
 
+            // โหมดเพิ่มข้อมูลใหม่
             window.openCourseModal = () => {
                 document.getElementById('courseForm').reset();
                 document.getElementById('c_id').value = '';
-                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); // เคลียร์ Checkbox
-                document.getElementById('courseModalTitle').innerText = 'เพิ่มข้อมูลรายวิชา';
+                document.getElementById('c_edit_mode').value = 'false';
+                document.getElementById('c_term').value = window.courseCurrentTerm; 
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); 
+                document.querySelectorAll('.modal-plan-chk').forEach(chk => chk.checked = false);
+                window.updateModalTeacherList();
+                
+                // สลับปุ่มและตารางให้เป็นโหมด Batch Add
+                document.getElementById('courseModalTitle').innerText = 'เพิ่มอัตรากำลังรายวิชา';
+                document.getElementById('batch_add_controls').classList.remove('hidden');
+                document.getElementById('temp_table_container').classList.remove('hidden');
+                document.getElementById('btn_save_batch').classList.remove('hidden');
+                document.getElementById('btn_save_edit').classList.add('hidden');
+                
+                window.tempCourseList = [];
+                window.renderTempCourseTable();
+                
                 document.getElementById('courseModal').classList.remove('hidden');
             };
 
@@ -959,7 +1046,7 @@
                 window.courseDataList = newCourses.map((c, index) => ({...c, originalIndex: index}));
                 window.filterCourseTable();
                 showLoading(false);
-                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลรายวิชาจากระบบแล้ว', timer: 1500, showConfirmButton: false});
+                Swal.fire({icon: 'success', title: 'รีเฟรชสำเร็จ', text: 'อัปเดตข้อมูลจากระบบแล้ว', timer: 1500, showConfirmButton: false});
             };
 
             window.addCourseLevel = () => {
@@ -994,20 +1081,119 @@
                 document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false);
             };
 
-            window.addCoursePlan = () => {
-                const plan = document.getElementById('c_plan_sel').value;
-                if (!plan) return;
-                const input = document.getElementById('c_plan');
-                let currentPlans = input.value.split(',').map(r => r.trim()).filter(r => r);
-                if(!currentPlans.includes(plan)) {
-                    currentPlans.push(plan);
+            // --- ระบบพักข้อมูลเข้าตารางชั่วคราว (Batch Add Logic) ---
+            window.addCourseToTemp = () => {
+                const code = document.getElementById('c_code').value.trim();
+                const name = document.getElementById('c_name').value.trim();
+                const credit = document.getElementById('c_credit').value.trim();
+                const teacher = document.getElementById('c_teacher').value.trim();
+                const term = document.getElementById('c_term').value;
+                const group = document.getElementById('c_group').value;
+                const level = document.getElementById('c_level').value.trim();
+                
+                // ดึงค่าแผนการเรียนจาก Checkbox ที่ถูกติ๊ก
+                const plans = Array.from(document.querySelectorAll('.modal-plan-chk:checked')).map(c => c.value).join(', ');
+
+                if(!term || !group || !teacher) {
+                    return Swal.fire('แจ้งเตือน', 'กรุณาเลือก ภาคเรียน, กลุ่มสาระ และ ชื่อครูผู้สอน ก่อน', 'warning');
                 }
-                input.value = currentPlans.join(', ');
-                document.getElementById('c_plan_sel').value = '';
+                if(!code || !name || !credit) {
+                    return Swal.fire('แจ้งเตือน', 'กรุณากรอก รหัสวิชา, ชื่อวิชา และ หน่วยกิต ให้ครบถ้วน', 'warning');
+                }
+
+                const data = {
+                    'รหัสวิชา': code, 'ชื่อวิชา': name, 'หน่วยกิต': credit, 
+                    'ชื่อครูผู้สอน': teacher, 'ชั้นที่เปิดสอน': level, 
+                    'แผนการเรียน': plans, 'ภาคเรียนที่': term, 'กลุ่มสาระการเรียนรู้': group
+                };
+
+                window.tempCourseList.push(data);
+                window.renderTempCourseTable();
+
+                // เคลียร์เฉพาะข้อมูลวิชา เพื่อให้กรอกวิชาถัดไปของครูคนเดิมได้เร็วขึ้น
+                document.getElementById('c_code').value = '';
+                document.getElementById('c_name').value = '';
+                document.getElementById('c_credit').value = '';
+                document.getElementById('c_level').value = '';
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false);
+                document.querySelectorAll('.modal-plan-chk').forEach(chk => chk.checked = false);
+                
+                document.getElementById('c_code').focus(); // นำเคอร์เซอร์ไปรอที่ช่องรหัสวิชา
             };
 
-            window.clearCoursePlan = () => {
-                document.getElementById('c_plan').value = '';
+            window.renderTempCourseTable = () => {
+                const tbody = document.getElementById('tempCourseTbody');
+                document.getElementById('tempCount').innerText = window.tempCourseList.length;
+                
+                if (window.tempCourseList.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400 italic">ยังไม่มีรายการ กรอกข้อมูลด้านบนแล้วกด "เพิ่มลงรายการด้านล่าง"</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = window.tempCourseList.map((c, idx) => `
+                    <tr class="border-b bg-white hover:bg-gray-50">
+                        <td class="p-2 border-b font-semibold text-navy">${c['รหัสวิชา']}</td>
+                        <td class="p-2 border-b">${c['ชื่อวิชา']}</td>
+                        <td class="p-2 border-b">${c['หน่วยกิต']}</td>
+                        <td class="p-2 border-b">${c['ชั้นที่เปิดสอน']}</td>
+                        <td class="p-2 border-b">${c['แผนการเรียน']}</td>
+                        <td class="p-2 border-b text-center">
+                            <button type="button" onclick="removeTempCourse(${idx})" class="text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded shadow-sm"><i class="fas fa-trash"></i></button>
+                        </td>
+                    </tr>
+                `).join('');
+            };
+
+            window.removeTempCourse = (index) => {
+                window.tempCourseList.splice(index, 1);
+                window.renderTempCourseTable();
+            };
+
+            window.clearTempCourses = () => {
+                window.tempCourseList = [];
+                window.renderTempCourseTable();
+            };
+
+            // บันทึกรายการทั้งหมดในตารางชั่วคราวลงระบบ
+            window.saveBatchCourses = () => {
+                if (window.tempCourseList.length === 0) {
+                    return Swal.fire('แจ้งเตือน', 'ไม่มีรายการให้บันทึก กรุณาเพิ่มข้อมูลลงตารางด้านล่างก่อน', 'warning');
+                }
+                
+                closeCourseModal();
+                
+                // ใช้การลูปเรียก processCourseSave เหมือนการนำเข้า CSV เล็กๆ
+                window.tempCourseList.forEach(data => {
+                    processCourseSave(data, null);
+                });
+                
+                window.tempCourseList = []; // เคลียร์ตารางรอใช้งานรอบหน้า
+            };
+
+            // บันทึกเฉพาะรายการที่แก้ไข (กรณีเปิดโหมด Edit)
+            window.saveEditedCourse = () => {
+                const rowIdStr = document.getElementById('c_id').value;
+                const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
+                
+                const plans = Array.from(document.querySelectorAll('.modal-plan-chk:checked')).map(c => c.value).join(', ');
+                
+                const data = {
+                    'รหัสวิชา': document.getElementById('c_code').value.trim(), 
+                    'ชื่อวิชา': document.getElementById('c_name').value.trim(),
+                    'หน่วยกิต': document.getElementById('c_credit').value.trim(), 
+                    'ชื่อครูผู้สอน': document.getElementById('c_teacher').value,
+                    'ชั้นที่เปิดสอน': document.getElementById('c_level').value.trim(), 
+                    'แผนการเรียน': plans,
+                    'ภาคเรียนที่': document.getElementById('c_term').value, 
+                    'กลุ่มสาระการเรียนรู้': document.getElementById('c_group').value
+                };
+                
+                if(!data['รหัสวิชา'] || !data['ชื่อวิชา']) {
+                    return Swal.fire('แจ้งเตือน', 'กรุณากรอกรหัสวิชาและชื่อวิชา', 'warning');
+                }
+                
+                closeCourseModal();
+                processCourseSave(data, rowId);
             };
 
             const processCourseSave = (data, rowId) => {
@@ -1016,7 +1202,7 @@
                     let index = window.courseDataList.findIndex(item => item.originalIndex === rowId);
                     if(index !== -1) window.courseDataList[index] = { ...data, originalIndex: rowId, isPending: true };
                 } else {
-                    window.courseDataList.push({ ...data, originalIndex: 'temp_' + Date.now(), isPending: true });
+                    window.courseDataList.push({ ...data, originalIndex: 'temp_' + Date.now() + Math.random(), isPending: true });
                 }
                 window.filterCourseTable();
 
@@ -1037,7 +1223,7 @@
                     window.pendingCourseSync--;
                     window.updateCourseSyncStatus();
                     const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-                    Toast.fire({ icon: 'error', title: 'บันทึกข้อมูลรายวิชาล้มเหลว' });
+                    Toast.fire({ icon: 'error', title: 'บันทึกข้อมูลล้มเหลว' });
                 });
             };
 
@@ -1068,71 +1254,124 @@
                 }
             };
 
-            document.getElementById('courseForm').onsubmit = async (e) => {
-                e.preventDefault();
-                const rowIdStr = document.getElementById('c_id').value;
-                const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
-                const data = {
-                    'รหัสวิชา': document.getElementById('c_code').value, 'ชื่อวิชา': document.getElementById('c_name').value,
-                    'หน่วยกิต': document.getElementById('c_credit').value, 'ชื่อครูผู้สอน': document.getElementById('c_teacher').value,
-                    'ชั้นที่เปิดสอน': document.getElementById('c_level').value, 'แผนการเรียน': document.getElementById('c_plan').value,
-                    'ภาคเรียนที่': document.getElementById('c_term').value, 'กลุ่มสาระการเรียนรู้': document.getElementById('c_group').value
-                };
-                
-                closeCourseModal();
-                processCourseSave(data, rowId);
+            // ลบฟังก์ชัน onsubmit เก่าที่ซ้ำซ้อนทิ้ง ป้องกันปัญหากด Enter แล้วเกิด Error
+            document.getElementById('courseForm').onsubmit = (e) => {
+                e.preventDefault(); 
             };
 
+            // โหมดแก้ไขข้อมูลเดิม (รายตัว)
             window.editCourse = (origIdx) => {
                 let data = window.courseDataList.find(c => c.originalIndex === origIdx);
                 if(!data) return;
                 
                 document.getElementById('c_id').value = origIdx;
+                document.getElementById('c_edit_mode').value = 'true';
                 document.getElementById('c_code').value = String(data['รหัสวิชา'] || '').trim();
                 document.getElementById('c_name').value = String(data['ชื่อวิชา'] || '').trim();
                 document.getElementById('c_credit').value = String(data['หน่วยกิต'] || '').trim();
+                
+                document.getElementById('c_term').value = String(data['ภาคเรียนที่'] || '').trim();
+                document.getElementById('c_group').value = String(data['กลุ่มสาระการเรียนรู้'] || '').trim();
+                
+                window.updateModalTeacherList();
                 
                 // ดึงชื่อครูผู้สอน และเลือก Dropdown ให้ตรงกัน
                 let teacherName = String(data['ชื่อครูผู้สอน'] || '').trim();
                 let teacherSelect = document.getElementById('c_teacher');
                 teacherSelect.value = teacherName;
                 
-                // หากชื่อครูไม่มีในลิสต์ตัวเลือก (อาจถูกแก้ไขหรือลบไปแล้ว) ให้เพิ่มเข้าไปชั่วคราวเพื่อให้ฟอร์มแสดงผลครบ
+                // หากชื่อครูไม่มีในลิสต์ตัวเลือก ให้เพิ่มเข้าไปชั่วคราวเพื่อให้ฟอร์มแสดงผลครบ
                 if (teacherSelect.value !== teacherName && teacherName !== '') {
                     teacherSelect.add(new Option(teacherName, teacherName));
                     teacherSelect.value = teacherName;
                 }
                 
-                document.getElementById('c_term').value = String(data['ภาคเรียนที่'] || '').trim();
-                document.getElementById('c_group').value = String(data['กลุ่มสาระการเรียนรู้'] || '').trim();
-                document.getElementById('c_level').value = String(data['ชั้นที่เปิดสอน'] || '').trim();
-                document.getElementById('c_plan').value = String(data['แผนการเรียน'] || '').trim();
+                document.getElementById('c_level').value = String(data['ชั้นที่เปิดสอน'] || data['ชั้นที่สอน'] || '').trim();
                 
-                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); // เคลียร์ Checkbox
-                document.getElementById('courseModalTitle').innerText = 'แก้ไขข้อมูลรายวิชา';
+                // ติ๊ก Checkbox แผนการเรียนกลับคืน
+                let currentPlans = String(data['แผนการเรียน'] || '').split(',').map(p => p.trim());
+                document.querySelectorAll('.modal-plan-chk').forEach(chk => {
+                    chk.checked = currentPlans.includes(chk.value);
+                });
+                
+                document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); 
+                
+                // ซ่อนส่วนประกอบของ Batch Add และแสดงปุ่มบันทึกแก้ไข
+                document.getElementById('courseModalTitle').innerText = 'แก้ไขอัตรากำลังรายวิชา';
+                document.getElementById('batch_add_controls').classList.add('hidden');
+                document.getElementById('temp_table_container').classList.add('hidden');
+                document.getElementById('btn_save_batch').classList.add('hidden');
+                document.getElementById('btn_save_edit').classList.remove('hidden');
+                
                 document.getElementById('courseModal').classList.remove('hidden');
             };
 
-            window.resetCourseForm = () => { document.getElementById('courseForm').reset(); document.getElementById('c_id').value = ''; document.getElementById('c_btn_save').innerText = 'บันทึก'; document.getElementById('c_btn_cancel').classList.add('hidden'); }
+            window.resetCourseForm = () => { 
+                document.getElementById('courseForm').reset(); 
+                document.getElementById('c_id').value = ''; 
+                document.getElementById('c_term').value = window.courseCurrentTerm; 
+                document.getElementById('c_btn_save').innerText = 'บันทึก'; 
+                document.getElementById('c_btn_cancel').classList.add('hidden'); 
+            }
             
+            window.updateFilterTeacherList = () => {
+                const filterGroup = document.getElementById('filter_c_group').value;
+                const teacherSelect = document.getElementById('filter_c_teacher');
+                const currentTeacher = teacherSelect.value;
+                
+                let filteredTeachers = filterGroup === 'all' ? window.allTeachersList : window.allTeachersList.filter(t => t['กลุ่มสาระการเรียนรู้'] === filterGroup);
+                
+                teacherSelect.innerHTML = '<option value="all">ทุกครูผู้สอน</option>' + 
+                    filteredTeachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
+                
+                if (filteredTeachers.some(t => t['ชื่อ-สกุล'] === currentTeacher)) {
+                    teacherSelect.value = currentTeacher;
+                } else {
+                    teacherSelect.value = 'all';
+                }
+                window.filterCourseTable();
+            };
+
+            window.updateModalTeacherList = () => {
+                const group = document.getElementById('c_group').value;
+                const teacherSelect = document.getElementById('c_teacher');
+                const currentTeacher = teacherSelect.value;
+
+                let filteredTeachers = group ? window.allTeachersList.filter(t => t['กลุ่มสาระการเรียนรู้'] === group) : window.allTeachersList;
+                
+                teacherSelect.innerHTML = '<option value="">เลือก...</option>' + 
+                    filteredTeachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
+                    
+                if (filteredTeachers.some(t => t['ชื่อ-สกุล'] === currentTeacher)) {
+                    teacherSelect.value = currentTeacher;
+                } else {
+                    teacherSelect.value = '';
+                }
+            };
+
             window.filterCourseTable = () => {
                 const filterGroup = document.getElementById('filter_c_group').value;
                 const filterGrade = document.getElementById('filter_c_grade').value;
                 const filterTerm = document.getElementById('filter_c_term').value;
+                const filterTeacher = document.getElementById('filter_c_teacher').value;
                 
                 window.filteredCourseList = window.courseDataList.filter(c => {
                     let matchGroup = filterGroup === 'all' || c['กลุ่มสาระการเรียนรู้'] === filterGroup;
-                    let matchTerm = filterTerm === 'all' || c['ภาคเรียนที่'] == filterTerm;
+                    let matchTerm = filterTerm === 'all' || String(c['ภาคเรียนที่']).trim() === String(filterTerm).trim();
+                    let matchTeacher = filterTeacher === 'all' || c['ชื่อครูผู้สอน'] === filterTeacher;
                     let matchGrade = true;
                     if (filterGrade !== 'all') {
-                        let cLevels = (c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim());
+                        let cLevels = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim());
                         // เช็คว่าห้องเรียนขึ้นต้นด้วยระดับชั้นที่เลือกหรือไม่ (เช่น เลือก ม.1 ก็จะเจอ ม.1/1, ม.1/2)
                         matchGrade = cLevels.some(l => l.startsWith(filterGrade));
                     }
-                    return matchGroup && matchGrade && matchTerm;
+                    return matchGroup && matchGrade && matchTerm && matchTeacher;
                 });
                 window.renderCourseRows(window.filteredCourseList);
             }
+
+            // สั่งให้ตารางกรองและแสดงเฉพาะภาคเรียนปัจจุบันตั้งแต่โหลดหน้าจอเสร็จ
+            window.filterCourseTable();
 
             // --- ฟังก์ชันดาวน์โหลดฟอร์ม CSV ---
             window.downloadCSVTemplate = () => {
@@ -1267,7 +1506,7 @@
                         <td style="border: 1px solid #cbd5e1; padding: 8px;">${c['ชื่อวิชา']||''}</td>
                         <td style="border: 1px solid #cbd5e1; padding: 8px; text-align: center;">${parseFloat(c['หน่วยกิต']).toFixed(1) || ''}</td>
                         <td style="border: 1px solid #cbd5e1; padding: 8px;">${c['ชื่อครูผู้สอน']||''}</td>
-                        <td style="border: 1px solid #cbd5e1; padding: 8px;">${c['ชั้นที่เปิดสอน']||''}</td>
+                        <td style="border: 1px solid #cbd5e1; padding: 8px;">${c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || ''}</td>
                         <td style="border: 1px solid #cbd5e1; padding: 8px;">${c['แผนการเรียน']||''}</td>
                         <td style="border: 1px solid #cbd5e1; padding: 8px;">${c['กลุ่มสาระการเรียนรู้']||''}</td>
                     </tr>
@@ -1278,7 +1517,7 @@
                     <!DOCTYPE html>
                     <html>
                     <head>
-                        <title>รายงานข้อมูลรายวิชา - ${schoolName}</title>
+                        <title>รายงานอัตรากำลังรายวิชา - ${schoolName}</title>
                         <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600&display=swap" rel="stylesheet">
                         <style>
                             body { font-family: 'Prompt', sans-serif; font-size: 13px; color: #1e293b; padding: 20px; }
@@ -1311,7 +1550,7 @@
                         
                         <div class="header">
                             <img src="${logoUrl}" class="logo">
-                            <h2>รายงานข้อมูลรายวิชา (${subtitleText.trim()})</h2>
+                            <h2>รายงานอัตรากำลังรายวิชา (${subtitleText.trim()})</h2>
                             <p>${schoolName} ปีการศึกษา ${sysYear}</p>
                             <p>ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')}</p>
                         </div>
@@ -1324,7 +1563,7 @@
                                     <th width="20%">ชื่อวิชา</th>
                                     <th width="8%">หน่วยกิต</th>
                                     <th width="15%">ครูผู้สอน</th>
-                                    <th width="15%">ชั้นที่เปิดสอน</th>
+                                    <th width="15%">ชั้นที่สอน</th>
                                     <th width="12%">แผนการเรียน</th>
                                     <th width="15%">กลุ่มสาระฯ</th>
                                 </tr>
@@ -1362,6 +1601,26 @@
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md mb-6">
                     <form id="settingsForm" class="space-y-6 text-sm">
+                        <!-- การตั้งค่าการเปิด-ปิดเมนูใช้งาน -->
+                        <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg">
+                            <h4 class="font-bold text-navy border-b border-blue-200 pb-1 mb-3">ตั้งค่าการเปิด-ปิดเมนูใช้งาน</h4>
+                            <div class="flex flex-col space-y-3">
+                                <label class="flex items-center space-x-3 cursor-pointer">
+                                    <input type="checkbox" id="s_menu_courses" class="form-checkbox h-5 w-5 text-navy focus:ring-navy rounded border-gray-400" ${settings.menu_courses !== false ? 'checked' : ''}>
+                                    <span class="text-sm font-medium text-gray-800">เปิดเมนู "บันทึกอัตรากำลังรายวิชา"</span>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer">
+                                    <input type="checkbox" id="s_menu_create" class="form-checkbox h-5 w-5 text-navy focus:ring-navy rounded border-gray-400" ${settings.menu_create !== false ? 'checked' : ''}>
+                                    <span class="text-sm font-medium text-gray-800">เปิดเมนู "จัดทำตารางสอน"</span>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer">
+                                    <input type="checkbox" id="s_menu_download" class="form-checkbox h-5 w-5 text-navy focus:ring-navy rounded border-gray-400" ${settings.menu_download !== false ? 'checked' : ''}>
+                                    <span class="text-sm font-medium text-gray-800">เปิดเมนู "ดาวน์โหลดตารางสอน"</span>
+                                </label>
+                            </div>
+                            <p class="text-xs text-blue-600 mt-3">*หากปิดสวิตช์ เมนูดังกล่าวจะถูกซ่อนจากผู้ใช้งานทุกคน (รวมถึงผู้ดูแลระบบ) ทันทีที่บันทึก</p>
+                        </div>
+
                         <!-- การตั้งค่าข้อมูลพื้นฐานโรงเรียน -->
                         <div>
                             <h4 class="font-bold text-navy border-b pb-1 mb-3">ตั้งค่าข้อมูลพื้นฐานโรงเรียน</h4>
@@ -1654,6 +1913,9 @@
             document.getElementById('settingsForm').onsubmit = async (e) => {
                 e.preventDefault();
                 const data = {
+                    menu_courses: document.getElementById('s_menu_courses').checked,
+                    menu_create: document.getElementById('s_menu_create').checked,
+                    menu_download: document.getElementById('s_menu_download').checked,
                     school_name: document.getElementById('s_school_name').value,
                     term: document.getElementById('s_term').value, year: document.getElementById('s_year').value,
                     periods: parseInt(document.getElementById('s_periods').value), duration: parseInt(document.getElementById('s_duration').value),
@@ -1674,7 +1936,16 @@
                     if(data.learning_plans) {
                         learningPlans = extractPlanNames(data.learning_plans);
                     }
-                    Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าเรียบร้อย', 'success');
+                    
+                    // สั่งให้สร้างเมนูใหม่ทันทีเพื่ออัปเดตการแสดงผล (ถ้าเปิด-ปิดไว้)
+                    await buildMenu();
+                    
+                    Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าเรียบร้อย', 'success').then(() => {
+                         // ถ้ายืนอยู่ในหน้าแรก ให้โหลดหน้าใหม่เพื่อซ่อน/แสดงปุ่มเมนูใหญ่ๆ
+                         if(document.querySelector('.nav-link.bg-gold') && document.querySelector('.nav-link.bg-gold').dataset.page === 'dashboard') {
+                             loadPage('dashboard');
+                         }
+                    });
                 }
             };
         }
@@ -2049,7 +2320,7 @@
                 });
 
                 let targetCourses = window.courseLookup.filter(c => {
-                    let cRooms = (c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                    let cRooms = (c['ชั้นที่สอน'] || c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
                     let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
                     let cTerm = String(c['ภาคเรียนที่'] || '').trim();
 
@@ -2077,19 +2348,25 @@
                     let code = String(c['รหัสวิชา'] || '').trim();
                     let name = String(c['ชื่อวิชา'] || '').trim();
                     let teacher = String(c['ชื่อครูผู้สอน'] || '').trim();
-                    let credit = parseFloat(c['หน่วยกิต']) || 0;
-                    let required = credit * 2; 
+                    let creditStr = String(c['หน่วยกิต'] || '').trim();
+                    let credit = parseFloat(creditStr);
+                    let required = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0; 
                     let scheduled = scheduledCounts[code] || 0;
                     let remaining = required - scheduled;
                     
                     let isBusy = busyTeachers.has(teacher);
                     let isEditingThis = existingData && existingData['รหัสวิชา'] === code;
 
-                    if (remaining > 0 || isEditingThis) {
+                    // ถ้าระบุว่าไม่ต้องนับหน่วยกิต (required = 0) ให้เพิ่มลงตัวเลือกเสมอ
+                    if (required === 0 || remaining > 0 || isEditingThis) {
                         if (isBusy && !isEditingThis) {
                             optionsHtml += `<option value="${code}" disabled>${code} - ${name} (ครูติดสอน)</option>`;
                         } else {
-                            optionsHtml += `<option value="${code}">${code} - ${name} (เหลือ ${remaining} คาบ)</option>`;
+                            if (required === 0) {
+                                optionsHtml += `<option value="${code}">${code} - ${name}</option>`;
+                            } else {
+                                optionsHtml += `<option value="${code}">${code} - ${name} (เหลือ ${remaining} คาบ)</option>`;
+                            }
                         }
                     }
                 });
@@ -2136,23 +2413,28 @@
                         return a.localeCompare(b);
                     });
 
-                    gridHtml = '<div class="flex flex-wrap items-stretch justify-center gap-2.5 w-full">';
+                    gridHtml = '<div class="flex flex-wrap items-stretch justify-center gap-3 w-full">';
                     groupKeys.forEach(gKey => {
-                        gridHtml += `<div class="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-[140px] flex flex-col">
-                            <h4 class="font-bold text-navy border-b border-gold pb-1 mb-2 text-center text-sm">${gKey}</h4>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">`;
+                        // ปรับให้ flex-auto ยืดหยุ่นตามเนื้อหา และขยายขนาดคอลัมน์สำหรับห้องปฏิบัติการ
+                        let gridColsClass = gKey === "ห้องปฏิบัติการ" 
+                            ? "grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2" 
+                            : "grid grid-cols-[repeat(auto-fit,minmax(75px,1fr))] gap-1.5";
+                            
+                        gridHtml += `<div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex-auto min-w-[180px] max-w-full flex flex-col">
+                            <h4 class="font-bold text-navy border-b border-gold pb-1.5 mb-3 text-center text-sm">${gKey}</h4>
+                            <div class="${gridColsClass}">`;
                         
                         groupedLocs[gKey].sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})).forEach(loc => {
                             let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
                             if (busyLocations.has(loc) && !isEditingThisLoc) {
                                 gridHtml += `
-                                    <button type="button" disabled class="p-1 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[36px] shadow-sm relative overflow-hidden">
-                                        <span class="line-through z-10 text-[11px] truncate w-full px-0.5 text-center leading-tight">${loc}</span>
-                                        <span class="text-[9px] mt-0.5 text-red-600 bg-red-100 px-1 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
+                                    <button type="button" disabled class="p-1.5 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[40px] shadow-sm relative overflow-hidden">
+                                        <span class="line-through z-10 text-[11px] whitespace-normal break-words w-full px-1 text-center leading-snug">${loc}</span>
+                                        <span class="text-[9px] mt-1 text-red-600 bg-red-100 px-1.5 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
                                     </button>`;
                             } else {
                                 gridHtml += `
-                                    <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-1 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[36px] shadow-sm hover:shadow-md text-[11px] truncate w-full px-0.5 text-center leading-tight">
+                                    <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-1.5 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[40px] shadow-sm hover:shadow-md text-[11px] whitespace-normal break-words w-full px-1 text-center leading-snug">
                                         ${loc}
                                     </button>`;
                             }
@@ -2300,9 +2582,11 @@
 
                 let courseInfo = window.courseLookup.find(c => String(c['รหัสวิชา'] || '').trim() === code);
                 if (courseInfo) {
-                    let credit = parseFloat(courseInfo['หน่วยกิต']) || 0;
-                    let maxPeriods = credit * 2;
+                    let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
+                    let credit = parseFloat(creditStr);
+                    let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
                     let requestedPeriods = dayChks.length * periodChks.length;
+                    
                     if (maxPeriods > 0 && (currentCourseCount + requestedPeriods) > maxPeriods) {
                         conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${requestedPeriods} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
                     }
@@ -2683,8 +2967,24 @@
                 }
             };
             
-            // ตัวแปรสำหรับเช็คคิวการบันทึกเบื้องหลัง
+            // ฟังก์ชันเลือกแผนอัตโนมัติเมื่อเลือกห้อง (สำหรับฟอร์มในป๊อปอัพ)
+            window.autoSelectModalPlan = () => {
+                const selectedRoom = document.getElementById('m_room').value;
+                if(!selectedRoom) {
+                    document.getElementById('m_plan').value = '';
+                    return;
+                }
+                for (const [pName, pRooms] of Object.entries(window.planMappings)) {
+                    if (pRooms.includes(selectedRoom)) {
+                        document.getElementById('m_plan').value = pName;
+                        break;
+                    }
+                }
+            };
+            
+            // ตัวแปรสำหรับเช็คคิวการบันทึกเบื้องหลัง และโหมดการแสดงผล
             window.pendingSyncCount = 0;
+            window.interactiveViewMode = 'student'; // ค่าเริ่มต้นเป็นตารางนักเรียน
 
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md mb-6">
@@ -2692,9 +2992,15 @@
                         <i class="fas fa-calendar-alt text-green-500 mr-2"></i>จัดทำตารางสอน (แบบตาราง)
                         <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full ml-3 border border-blue-200 shadow-sm">ภาคเรียนที่ ${currentTerm}/${currentYear}</span>
                     </h3>
+
+                    <!-- แท็บสลับโหมด -->
+                    <div class="flex border-b border-gray-200 mb-4">
+                        <button type="button" id="tab_grid_student" class="py-2 px-6 text-navy font-bold border-b-2 border-navy outline-none transition-all" onclick="switchGridTab('student')">ตารางห้องเรียน</button>
+                        <button type="button" id="tab_grid_teacher" class="py-2 px-6 text-gray-500 hover:text-navy outline-none transition-all" onclick="switchGridTab('teacher')">ตารางครู</button>
+                    </div>
                     
-                    <!-- ส่วนเลือกห้องและแผน -->
-                    <div class="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <!-- ส่วนเลือกห้องและแผน (โหมดนักเรียน) -->
+                    <div id="filter_student" class="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">เลือกระดับชั้น/ห้อง</label>
                             <select id="grid_room" onchange="autoSelectPlan()" class="border border-gray-300 rounded p-2 w-48 text-sm focus:border-gold outline-none">
@@ -2711,6 +3017,30 @@
                         </div>
                         <button onclick="refreshSchGrid()" class="bg-navy text-white px-6 py-2 rounded hover:bg-opacity-90 transition shadow-sm h-[38px] flex items-center text-sm">
                             <i class="fas fa-search mr-2"></i> โหลดตาราง
+                        </button>
+                        <button onclick="forceRefreshSchGrid()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition shadow-sm h-[38px] flex items-center text-sm" title="ดึงข้อมูลล่าสุดจากระบบ">
+                            <i class="fas fa-sync-alt mr-2"></i> รีเฟรชข้อมูล
+                        </button>
+                    </div>
+
+                      <!-- ส่วนเลือกครู (โหมดครู) -->
+                    <div id="filter_teacher" class="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200 hidden">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">กลุ่มสาระการเรียนรู้</label>
+                            <select id="grid_t_group" onchange="updateGridTeacherList()" class="border border-gray-300 rounded p-2 w-48 text-sm focus:border-gold outline-none">
+                                <option value="all">ทุกกลุ่มสาระ</option>
+                                ${subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อครูผู้สอน</label>
+                            <select id="grid_t_name" class="border border-gray-300 rounded p-2 w-48 text-sm focus:border-gold outline-none">
+                                <option value="">-- เลือกครูผู้สอน --</option>
+                                ${teachersArr.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button onclick="refreshSchGrid()" class="bg-navy text-white px-6 py-2 rounded hover:bg-opacity-90 transition shadow-sm h-[38px] flex items-center text-sm">
+                            <i class="fas fa-search mr-2"></i> โหลดตารางครู
                         </button>
                         <button onclick="forceRefreshSchGrid()" class="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition shadow-sm h-[38px] flex items-center text-sm" title="ดึงข้อมูลล่าสุดจากระบบ">
                             <i class="fas fa-sync-alt mr-2"></i> รีเฟรชข้อมูล
@@ -2749,10 +3079,8 @@
                                 <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
-                        <form id="modalSchForm" class="p-6">
+                        <form id="modalSchForm" class="p-6 max-h-[80vh] overflow-y-auto">
                             <input type="hidden" id="m_original_id">
-                            <input type="hidden" id="m_room">
-                            <input type="hidden" id="m_plan">
                             <input type="hidden" id="m_creator">
                             
                             <div class="grid grid-cols-1 mb-4">
@@ -2768,19 +3096,37 @@
                                 </div>
                             </div>
 
-                            <div class="space-y-4 text-sm">
+                            <!-- Container เลือกห้อง/แผน ที่จะแสดงเฉพาะโหมดครู (โหมดนักเรียนจะซ่อนและล็อกค่าไว้) -->
+                            <div id="m_room_plan_container" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 pb-4 border-b border-gray-200 hidden">
                                 <div>
-                                    <label class="block mb-1 font-medium">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะวิชาที่เหลือคาบและครูว่าง</span></label>
+                                    <label class="block mb-1 font-medium text-sm">จัดลงชั้น/ห้อง <span class="text-xs text-red-500 ml-1">*</span></label>
+                                    <select id="m_room" class="w-full border rounded p-2 focus:border-gold outline-none text-sm" onchange="window.autoSelectModalPlan(); window.updateModalDropdowns(window.currentEditingData)">
+                                        <option value="">-- เลือกห้องเรียน --</option>
+                                        ${roomOptions}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block mb-1 font-medium text-sm">แผนการเรียน <span class="text-xs text-red-500 ml-1">*</span></label>
+                                    <select id="m_plan" class="w-full border rounded p-2 focus:border-gold outline-none text-sm" onchange="window.updateModalDropdowns(window.currentEditingData)">
+                                        <option value="">-- เลือกแผนการเรียน --</option>
+                                        ${planOptions}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                                <div>
+                                    <label class="block mb-1 font-medium">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะวิชาที่เหลือและครูว่าง</span></label>
                                     <input type="text" id="m_code" list="dl_m_code" required autocomplete="off" class="w-full border rounded p-2 focus:border-gold outline-none" onchange="autoFillModalCourse()" oninput="autoFillModalCourse()" placeholder="พิมพ์หรือเลือกรหัสวิชา...">
                                     <datalist id="dl_m_code"></datalist>
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">ชื่อวิชา</label>
-                                    <input type="text" id="m_name" readonly class="w-full border rounded p-2 bg-gray-50 text-gray-600">
+                                    <input type="text" id="m_name" readonly class="w-full border rounded p-2 bg-gray-50 text-gray-600 cursor-not-allowed">
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">ครูผู้สอน</label>
-                                    <input type="text" id="m_teacher" readonly class="w-full border rounded p-2 bg-gray-50 text-gray-600">
+                                    <input type="text" id="m_teacher" readonly class="w-full border rounded p-2 bg-gray-50 text-gray-600 cursor-not-allowed">
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">สถานที่เรียน <span class="text-xs text-red-500 font-normal ml-1">*คลิกเพื่อเลือก</span></label>
@@ -2805,6 +3151,39 @@
                 </div>
             `;
 
+            window.switchGridTab = (mode) => {
+                window.interactiveViewMode = mode;
+                if(mode === 'student') {
+                    document.getElementById('tab_grid_student').classList.add('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                    document.getElementById('tab_grid_student').classList.remove('text-gray-500');
+                    document.getElementById('tab_grid_teacher').classList.remove('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                    document.getElementById('tab_grid_teacher').classList.add('text-gray-500');
+                    
+                    document.getElementById('filter_student').classList.remove('hidden');
+                    document.getElementById('filter_teacher').classList.add('hidden');
+                } else {
+                    document.getElementById('tab_grid_teacher').classList.add('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                    document.getElementById('tab_grid_teacher').classList.remove('text-gray-500');
+                    document.getElementById('tab_grid_student').classList.remove('text-navy', 'font-bold', 'border-b-2', 'border-navy');
+                    document.getElementById('tab_grid_student').classList.add('text-gray-500');
+                    
+                    document.getElementById('filter_teacher').classList.remove('hidden');
+                    document.getElementById('filter_student').classList.add('hidden');
+                }
+                document.getElementById('gridContainer').classList.add('hidden');
+            };
+
+            window.updateGridTeacherList = () => {
+                const group = document.getElementById('grid_t_group').value;
+                const select = document.getElementById('grid_t_name');
+                let filtered = teachersArr;
+                if(group !== 'all') {
+                    filtered = teachersArr.filter(t => t['กลุ่มสาระการเรียนรู้'] === group);
+                }
+                select.innerHTML = '<option value="">-- เลือกครูผู้สอน --</option>' + 
+                    filtered.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
+            };
+
             window.forceRefreshSchGrid = async () => {
                 showLoading(true);
                 let [newDataList, newCourses] = await Promise.all([
@@ -2814,9 +3193,10 @@
                 window.interactiveSchData = newDataList.map((d, index) => ({...d, originalIndex: index}));
                 window.interactiveCourses = newCourses;
                 
-                const room = document.getElementById('grid_room').value;
-                const plan = document.getElementById('grid_plan').value;
-                if (room && plan) {
+                // ถ้าระบุข้อมูลในฟิลเตอร์ครบ ให้โหลดตารางใหม่ทันที
+                if (window.interactiveViewMode === 'student' && document.getElementById('grid_room').value) {
+                    window.refreshSchGrid();
+                } else if (window.interactiveViewMode === 'teacher' && document.getElementById('grid_t_name').value) {
                     window.refreshSchGrid();
                 }
                 showLoading(false);
@@ -2848,16 +3228,25 @@
 
             // ฟังก์ชันโหลดและวาดตาราง
             window.refreshSchGrid = () => {
+                let targetData = [];
+                let titleText = '';
                 const room = document.getElementById('grid_room').value;
                 const plan = document.getElementById('grid_plan').value;
+                const teacher = document.getElementById('grid_t_name').value;
 
-                if (!room || !plan) {
-                    Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้อง และ แผนการเรียน ก่อน', 'warning');
-                    return;
+                if (window.interactiveViewMode === 'student') {
+                    if (!room || !plan) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้อง และ แผนการเรียน ก่อน', 'warning');
+                    titleText = 'ตารางสอนห้อง ' + room + ' (แผนฯ: ' + plan + ')';
+                    targetData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
+                } else {
+                    if (!teacher) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกครูผู้สอนก่อน', 'warning');
+                    titleText = 'ตารางสอนของ ' + teacher;
+                    let targetTeacherName = String(teacher).replace(/\s+/g, ' ').trim();
+                    targetData = window.interactiveSchData.filter(d => String(d['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === targetTeacherName);
                 }
 
                 document.getElementById('gridContainer').classList.remove('hidden');
-                document.getElementById('gridTitleDisplay').innerText = 'ตารางสอนห้อง ' + room + ' (แผนฯ: ' + plan + ')';
+                document.getElementById('gridTitleDisplay').innerText = titleText;
 
                 // ดึงการตั้งค่าเวลาพักและคาบเรียน
                 let breakPeriod = parseInt(window.interactiveSettings?.break_period || 4);
@@ -2883,9 +3272,6 @@
                 }
                 document.getElementById('gridThead').innerHTML = '<tr>' + ths + '</tr>';
 
-                // กรองข้อมูลเฉพาะห้องและแผนการเรียนที่เลือก (ดึงวิชาที่ล๊อคมาแสดงด้วย)
-                const roomData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan); 
-
                 const days = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
                 let trs = '';
 
@@ -2893,45 +3279,50 @@
                     let tds = '';
                     for(let i=1; i<=window.interactivePeriods; i++) {
                         if (i === breakPeriod) {
-                            // แทรกช่องคาบพักกลางวันแทนคาบเรียนปกติ
                             tds += '<td class="border border-gray-300 bg-gray-200 text-center align-middle text-gray-500 text-xs w-16"><i class="fas fa-utensils mb-1"></i><br>พัก</td>';
                         } else {
-                            // ค้นหาว่ามีข้อมูลลงไว้ในคาบนี้หรือไม่ (ดึงมาทั้งหมดในคาบเดียวกัน)
-                            let slots = roomData.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
+                            // ค้นหาว่ามีข้อมูลลงไว้ในคาบนี้หรือไม่
+                            let slots = targetData.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
                             
                             if(slots.length > 0) {
                                 let hasPending = slots.some(s => s.isPending);
 
                                 if (hasPending) {
-                                    // หากข้อมูลกำลังบันทึกเบื้องหลัง จะล็อคช่องนี้และแสดงอนิเมชัน
-                                    let firstSlot = slots[0]; // แสดงชื่อวิชาแรกเป็นหลัก
-                                    let teacherName = String(firstSlot['ชื่อครูผู้สอน'] || '');
-                                    let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                    let displayTeacher = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                    let firstSlot = slots[0]; 
+                                    let displaySub = '';
+                                    if (window.interactiveViewMode === 'student') {
+                                        let teacherName = String(firstSlot['ชื่อครูผู้สอน'] || '');
+                                        let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
+                                        displaySub = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                    } else {
+                                        displaySub = firstSlot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + firstSlot['ห้องเรียน'];
+                                    }
 
                                     tds += `
                                         <td class="border border-gray-300 p-2 text-center align-middle bg-blue-50 relative opacity-70">
                                             <div class="font-bold text-xs text-navy">${firstSlot['รหัสวิชา']}</div>
                                             <div class="text-[11px] text-gray-700 truncate w-full overflow-hidden">${firstSlot['ชื่อวิชา']}</div>
-                                            <div class="text-[11px] font-medium text-blue-700 mt-1">${displayTeacher}</div>
+                                            <div class="text-[11px] font-medium text-blue-700 mt-1">${displaySub}</div>
                                             ${firstSlot['สถานที่เรียน'] ? `<div class="text-[10px] text-gray-600 mt-0.5">${firstSlot['สถานที่เรียน']}</div>` : ''}
-                                            ${slots.length > 1 ? `<div class="text-[10px] text-purple-600 mt-1 font-bold">+ ซ้อนอีก ${slots.length - 1} วิชา</div>` : ''}
+                                            ${slots.length > 1 ? `<div class="text-[10px] text-purple-600 mt-1 font-bold">+ ซ้อนอีก ${slots.length - 1} รายการ</div>` : ''}
                                             <div class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-60 transition">
                                                 <i class="fas fa-spinner fa-spin text-blue-600 text-2xl drop-shadow-sm"></i>
                                             </div>
                                         </td>`;
                                 } else {
-                                    // สร้างบล็อกของรายวิชาทั้งหมดที่อยู่ในคาบนี้
                                     let cellContent = slots.map(slot => {
-                                        let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
-                                        let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                        let displayTeacher = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                        let displaySub = '';
+                                        if (window.interactiveViewMode === 'student') {
+                                            let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
+                                            let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
+                                            displaySub = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                        } else {
+                                            displaySub = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + slot['ห้องเรียน'];
+                                        }
 
-                                        // ตรวจสอบสิทธิ์ความเป็นเจ้าของข้อมูล
                                         let creator = slot['ผู้บันทึก'] || '';
                                         let isOwner = (creator === currentUser) || (currentRole === 'admin') || (!creator);
                                         
-                                        // หากเป็นวิชาที่ล๊อคมาจากหน้า "ล๊อครายวิชา" จะไม่อนุญาตให้แก้ไขในหน้านี้
                                         if (slot['ประเภท'] === 'ล็อค') {
                                             isOwner = false;
                                             creator = 'ระบบ (ต้องแก้ไขที่หน้าล๊อครายวิชาเท่านั้น)';
@@ -2940,10 +3331,8 @@
                                         let overlayIcon = isOwner ? '<i class="fas fa-edit text-navy text-lg drop-shadow-md"></i>' : '<i class="fas fa-lock text-red-100 text-lg drop-shadow-md"></i>';
                                         let overlayBg = isOwner ? 'bg-navy' : (slot['ประเภท'] === 'ล็อค' ? 'bg-purple-700' : 'bg-red-600');
                                         
-                                        // ใช้ event.stopPropagation() เพื่อไม่ให้คลิกทะลุไปโดนพื้นที่อื่นใน td
                                         let onClickAction = isOwner ? `onclick='openSchModal("${day}", ${i}, ${JSON.stringify(slot).replace(/"/g, '&quot;')}); event.stopPropagation();'` : `onclick='showPermissionAlert("${creator}"); event.stopPropagation();'`;
                                         
-                                        // ปรับแต่งสีพื้นหลัง ถ้าเป็นวิชาล๊อคให้เป็นสีม่วงอ่อน
                                         let slotBgClass = isOwner ? 'bg-blue-50 hover:bg-blue-100' : 'bg-gray-100 hover:bg-gray-200';
                                         if (slot['ประเภท'] === 'ล็อค') slotBgClass = 'bg-purple-50 hover:bg-purple-100';
 
@@ -2951,7 +3340,7 @@
                                             <div class="relative group p-2 border-b border-gray-300 last:border-0 ${slotBgClass} cursor-pointer transition text-center flex-1 flex flex-col justify-center" ${onClickAction}>
                                                 <div class="font-bold text-xs ${slot['ประเภท'] === 'ล็อค' ? 'text-purple-700' : 'text-navy'}">${slot['รหัสวิชา']} ${slot['ประเภท'] === 'ล็อค' ? '<i class="fas fa-lock text-[10px] ml-1"></i>' : ''}</div>
                                                 <div class="text-[11px] text-gray-700 truncate w-full overflow-hidden" title="${slot['ชื่อวิชา']}">${slot['ชื่อวิชา']}</div>
-                                                <div class="text-[11px] font-medium text-blue-700 mt-1">${displayTeacher}</div>
+                                                <div class="text-[11px] font-medium text-blue-700 mt-1">${displaySub}</div>
                                                 ${slot['สถานที่เรียน'] ? `<div class="text-[10px] text-gray-600 mt-0.5">${slot['สถานที่เรียน']}</div>` : ''}
                                                 <div class="absolute inset-0 ${overlayBg} bg-opacity-10 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
                                                     ${overlayIcon}
@@ -2985,71 +3374,140 @@
                 document.getElementById('gridTbody').innerHTML = trs;
 
                 // --- ส่วนประมวลผลและสรุปรายวิชาตกหล่น ---
-                let targetCourses = window.interactiveCourses.filter(c => {
-                    let cRooms = (c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
-                    let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
-                    let cTerm = String(c['ภาคเรียนที่'] || '').trim();
-                    
-                    let matchPlan = cPlans.includes(plan);
-                    let isRoomInPlanSettings = window.planMappings[plan] && window.planMappings[plan].includes(room);
-                    let matchTerm = cTerm === String(window.interactiveCurrentTerm);
-
-                    if (!matchTerm) return false;
-                    
-                    // ถ้ารายวิชาระบุห้องเจาะจง ต้องตรงกับห้องที่เลือก
-                    if (cRooms.length > 0) {
-                        return matchPlan && cRooms.includes(room);
-                    } else {
-                        // ถ้ารายวิชาไม่ระบุห้อง ให้เช็คว่ามีการตั้งค่า Mapping ห้องไว้ในแผนนี้หรือไม่
-                        if (Object.keys(window.planMappings).length > 0) {
-                            return matchPlan && isRoomInPlanSettings;
-                        } else {
-                            return matchPlan;
-                        }
-                    }
-                });
-
-                let scheduledCounts = {};
-                // roomData เก็บข้อมูลที่จัดลงตารางแล้วสำหรับห้องและแผนนี้
-                roomData.forEach(slot => {
-                    let code = String(slot['รหัสวิชา'] || '').trim();
-                    if (!scheduledCounts[code]) scheduledCounts[code] = 0;
-                    scheduledCounts[code]++;
-                });
-
                 let completeCount = 0;
                 let incompleteCourses = [];
+                let targetCourses = [];
+                let totalTarget = 0;
+                let scheduledCounts = {};
 
-                targetCourses.forEach(c => {
-                    let code = String(c['รหัสวิชา'] || '').trim();
-                    let name = String(c['ชื่อวิชา'] || '').trim();
-                    let teacher = String(c['ชื่อครูผู้สอน'] || '').trim();
-                    let credit = parseFloat(c['หน่วยกิต']) || 0;
-                    let required = credit * 2; // คำนวณคาบต่อสัปดาห์ (1 หน่วยกิต = 2 คาบ)
-                    let scheduled = scheduledCounts[code] || 0;
+                if (window.interactiveViewMode === 'student') {
+                    // คำนวณสรุปโหมดนักเรียน
+                    targetCourses = window.interactiveCourses.filter(c => {
+                        let cRooms = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                        let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
+                        let cTerm = String(c['ภาคเรียนที่'] || '').trim();
+                        
+                        let matchPlan = cPlans.includes(plan);
+                        let isRoomInPlanSettings = window.planMappings[plan] && window.planMappings[plan].includes(room);
+                        let matchTerm = cTerm === String(window.interactiveCurrentTerm).trim();
 
-                    if (required > 0) {
-                        if (scheduled >= required) {
-                            completeCount++;
+                        if (!matchTerm) return false;
+                        
+                        if (cRooms.length > 0) return matchPlan && cRooms.includes(room);
+                        else if (Object.keys(window.planMappings).length > 0) return matchPlan && isRoomInPlanSettings;
+                        else return matchPlan;
+                    });
+
+                    targetData.forEach(slot => {
+                        let code = String(slot['รหัสวิชา'] || '').trim();
+                        if (!scheduledCounts[code]) scheduledCounts[code] = 0;
+                        scheduledCounts[code]++;
+                    });
+
+                    targetCourses.forEach(c => {
+                        let code = String(c['รหัสวิชา'] || '').trim();
+                        let creditStr = String(c['หน่วยกิต'] || '').trim();
+                        let credit = parseFloat(creditStr);
+                        let required = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0; 
+                        let scheduled = scheduledCounts[code] || 0;
+
+                        if (required > 0) {
+                            if (scheduled >= required) {
+                                completeCount++;
+                            } else {
+                                incompleteCourses.push({
+                                    code: code, name: c['ชื่อวิชา'], target: c['ชื่อครูผู้สอน'], required: required, scheduled: scheduled
+                                });
+                            }
                         } else {
-                            incompleteCourses.push({
-                                code, name, teacher, required, scheduled
-                            });
+                            if (scheduled > 0) {
+                                completeCount++;
+                            } else {
+                                incompleteCourses.push({
+                                    code: code, name: c['ชื่อวิชา'], target: c['ชื่อครูผู้สอน'], required: 'ไม่ระบุ', scheduled: scheduled
+                                });
+                            }
                         }
-                    }
-                });
+                    });
+                    totalTarget = targetCourses.length;
+                } else {
+                    // คำนวณสรุปโหมดครู
+                    let targetTeacherName = String(teacher || '').replace(/\s+/g, ' ').trim();
+                    let currentTerm = String(window.interactiveCurrentTerm || '').trim();
+                    
+                    targetCourses = window.interactiveCourses.filter(c => {
+                        let cTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                        let cTerm = String(c['ภาคเรียนที่'] || '').trim();
+                        return cTeacher === targetTeacherName && cTerm === currentTerm;
+                    });
+                    
+                    targetCourses.forEach(c => {
+                        let code = String(c['รหัสวิชา'] || '').trim();
+                        
+                        // ดึงข้อมูลตรงๆ จากตารางอัตรากำลังรายวิชา
+                        let exactRoomText = String(c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').trim();
+                        let exactPlanText = String(c['แผนการเรียน'] || '').trim();
+                        
+                        let cRooms = exactRoomText.split(',').map(r => r.trim()).filter(r => r);
+                        let cPlans = exactPlanText.split(',').map(p => p.trim()).filter(p => p);
+                        
+                        let numRooms = cRooms.length;
 
-                let totalTarget = targetCourses.filter(c => (parseFloat(c['หน่วยกิต']) || 0) > 0).length;
-                let incompleteCount = incompleteCourses.length;
+                        // กำหนดข้อความที่จะแสดงในช่อง ชั้น/ห้อง ให้เหมือนในตารางอัตรากำลังเป๊ะๆ
+                        let displayTarget = exactRoomText;
+                        if (!displayTarget) {
+                            displayTarget = exactPlanText ? exactPlanText : 'ไม่ระบุชั้น/ห้อง';
+                        }
+
+                        // คำนวณหาเป้าหมายจำนวนคาบ (รวมห้องตามแผน ถ้าไม่ได้ระบุห้องตรงๆ)
+                        if (numRooms === 0 && cPlans.length > 0) {
+                            let tempRooms = [];
+                            cPlans.forEach(p => {
+                                if (window.planMappings[p]) tempRooms.push(...window.planMappings[p]);
+                            });
+                            let uniqueTempRooms = [...new Set(tempRooms)];
+                            numRooms = uniqueTempRooms.length;
+                        }
+                        if (numRooms === 0) numRooms = 1;
+
+                        let creditStr = String(c['หน่วยกิต'] || '').trim();
+                        let credit = parseFloat(creditStr);
+                        let required = (!isNaN(credit) && credit > 0) ? (credit * 2 * numRooms) : 0;
+                        
+                        let scheduled = window.interactiveSchData.filter(s => 
+                            String(s['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === targetTeacherName && 
+                            String(s['รหัสวิชา'] || '').trim() === code
+                        ).length;
+                        
+                        if (required > 0) {
+                            if (scheduled >= required) {
+                                completeCount++;
+                            } else {
+                                incompleteCourses.push({
+                                    code: code, name: c['ชื่อวิชา'], target: displayTarget, required: required, scheduled: scheduled
+                                });
+                            }
+                        } else {
+                            if (scheduled > 0) {
+                                completeCount++;
+                            } else {
+                                incompleteCourses.push({
+                                    code: code, name: c['ชื่อวิชา'], target: displayTarget, required: 'ไม่ระบุ', scheduled: scheduled
+                                });
+                            }
+                        }
+                    });
+                    totalTarget = targetCourses.length;
+                }
 
                 let missingHtml = `
                     <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 shadow-sm">
                         <h4 class="font-bold text-navy flex flex-wrap items-center mb-3">
-                            <i class="fas fa-clipboard-list mr-2"></i> สรุปการจัดรายวิชา (ห้อง ${room} แผนฯ ${plan})
+                            <i class="fas fa-clipboard-list mr-2"></i> สรุปรายวิชาของ ${window.interactiveViewMode === 'student' ? ('ห้อง '+room) : ('ครู '+teacher)}
                             <span class="ml-auto mt-2 sm:mt-0 text-sm font-normal bg-white px-3 py-1 rounded-full border shadow-sm">
                                 ทั้งหมด: <span class="font-bold">${totalTarget}</span> | 
                                 จัดครบ: <span class="text-green-600 font-bold">${completeCount}</span> | 
-                                ตกหล่น/ไม่ครบ: <span class="text-red-500 font-bold">${incompleteCount}</span>
+                                ขาด: <span class="text-red-500 font-bold">${incompleteCourses.length}</span>
                             </span>
                         </h4>
                 `;
@@ -3062,7 +3520,7 @@
                                     <tr>
                                         <th class="p-2 w-24">รหัสวิชา</th>
                                         <th class="p-2">ชื่อวิชา</th>
-                                        <th class="p-2">ครูผู้สอน</th>
+                                        <th class="p-2">${window.interactiveViewMode === 'student' ? 'ครูผู้สอน' : 'ชั้น/ห้อง'}</th>
                                         <th class="p-2 text-center w-28 whitespace-nowrap">ต้องการ (คาบ)</th>
                                         <th class="p-2 text-center w-28 whitespace-nowrap">จัดแล้ว (คาบ)</th>
                                         <th class="p-2 text-center w-24 whitespace-nowrap">ขาด (คาบ)</th>
@@ -3075,10 +3533,10 @@
                                     <tr class="border-b last:border-0 hover:bg-red-50 transition">
                                         <td class="p-2 font-semibold text-navy">${ic.code}</td>
                                         <td class="p-2 text-gray-800">${ic.name}</td>
-                                        <td class="p-2 text-gray-600">${ic.teacher}</td>
+                                        <td class="p-2 text-gray-600">${ic.target}</td>
                                         <td class="p-2 text-center">${ic.required}</td>
                                         <td class="p-2 text-center text-blue-600 font-semibold">${ic.scheduled}</td>
-                                        <td class="p-2 text-center text-red-600 font-bold bg-red-50">${ic.required - ic.scheduled}</td>
+                                        <td class="p-2 text-center text-red-600 font-bold bg-red-50">${ic.required === 'ไม่ระบุ' ? 'ไม่ระบุ' : (ic.required - ic.scheduled)}</td>
                                     </tr>
                         `;
                     });
@@ -3089,9 +3547,9 @@
                     `;
                 } else {
                     if (totalTarget > 0) {
-                        missingHtml += `<div class="text-center py-6 text-green-600 bg-white rounded shadow-sm border border-green-100"><i class="fas fa-check-circle text-3xl mb-2"></i><br>จัดตารางสอนครบทุกรายวิชาตามแผนการเรียนแล้ว ยอดเยี่ยม!</div>`;
+                        missingHtml += `<div class="text-center py-6 text-green-600 bg-white rounded shadow-sm border border-green-100"><i class="fas fa-check-circle text-3xl mb-2"></i><br>จัดตารางสอนครบทุกรายวิชาแล้ว ยอดเยี่ยม!</div>`;
                     } else {
-                        missingHtml += `<div class="text-center py-6 text-gray-500 bg-white rounded shadow-sm border border-gray-200"><i class="fas fa-info-circle text-3xl mb-2 text-gray-300"></i><br>ไม่มีข้อมูลรายวิชาที่ต้องลงในตารางสำหรับห้องและแผนการเรียนนี้<br><span class="text-xs">(กรุณาตรวจสอบการตั้งค่ารายวิชาในเมนู "จัดการข้อมูลรายวิชา")</span></div>`;
+                        missingHtml += `<div class="text-center py-6 text-gray-500 bg-white rounded shadow-sm border border-gray-200"><i class="fas fa-info-circle text-3xl mb-2 text-gray-300"></i><br>ไม่มีข้อมูลรายวิชาที่ต้องลงในตาราง<br><span class="text-xs">(กรุณาตรวจสอบการตั้งค่าในเมนู "บันทึกอัตรากำลังรายวิชา")</span></div>`;
                     }
                 }
                 missingHtml += `</div>`;
@@ -3105,6 +3563,11 @@
                 const plan = document.getElementById('m_plan').value;
                 const day = document.getElementById('m_day').value;
                 const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
+                
+                let currentTeacher = '';
+                if (window.interactiveViewMode === 'teacher') {
+                    currentTeacher = String(document.getElementById('grid_t_name').value || '').replace(/\s+/g, ' ').trim();
+                }
 
                 if(periodChks.length === 0) {
                     document.getElementById('dl_m_code').innerHTML = '';
@@ -3112,77 +3575,133 @@
                     window.modalLocationHtml = '<div class="col-span-full text-center text-gray-500 py-8 flex flex-col items-center"><i class="fas fa-exclamation-circle text-4xl text-gray-300 mb-3"></i><p>กรุณาระบุคาบเรียนให้ครบถ้วนก่อน</p></div>';
                     if(!existingData) {
                         document.getElementById('m_name').value = '';
-                        document.getElementById('m_teacher').value = '';
+                        document.getElementById('m_teacher').value = window.interactiveViewMode === 'teacher' ? document.getElementById('grid_t_name').value : '';
                     }
                     return;
                 }
 
-                // --- ประมวลผลตัวเลือกรหัสวิชา (เช็คโควต้า และ เช็คครูติดสอน) ---
-                const roomData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
-                let scheduledCounts = {};
-                roomData.forEach(slot => {
-                    let code = String(slot['รหัสวิชา'] || '').trim();
-                    if (existingData && slot.originalIndex === existingData.originalIndex) return; // ไม่นับคาบตัวเองที่กำลังแก้
-                    if (!scheduledCounts[code]) scheduledCounts[code] = 0;
-                    scheduledCounts[code]++;
-                });
-
+                // 1. ประมวลผลรหัสวิชาตามโหมด
                 let targetCourses = window.interactiveCourses.filter(c => {
-                    let cRooms = (c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
-                    let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
-                    let cTerm = String(c['ภาคเรียนที่'] || '').trim();
-
-                    let matchPlan = cPlans.includes(plan);
-                    let isRoomInPlanSettings = window.planMappings[plan] && window.planMappings[plan].includes(room);
-                    let matchTerm = cTerm === String(window.interactiveCurrentTerm);
-
+                    let matchTerm = String(c['ภาคเรียนที่'] || '').trim() === String(window.interactiveCurrentTerm).trim();
                     if (!matchTerm) return false;
                     
-                    if (cRooms.length > 0) return matchPlan && cRooms.includes(room);
-                    else if (Object.keys(window.planMappings).length > 0) return matchPlan && isRoomInPlanSettings;
-                    else return matchPlan;
+                    if (window.interactiveViewMode === 'teacher') {
+                        let cTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                        if (cTeacher !== currentTeacher) return false;
+                        if (room) {
+                             let cRooms = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                             let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
+                             
+                             let isRoomInPlanSettings = false;
+                             cPlans.forEach(p => {
+                                  if(window.planMappings[p] && window.planMappings[p].includes(room)) isRoomInPlanSettings = true;
+                             });
+                             
+                             if (cRooms.length > 0) {
+                                 if (!cRooms.includes(room)) return false;
+                             } else if (cPlans.length > 0) {
+                                 if (!isRoomInPlanSettings) return false;
+                             }
+                        }
+                        return true;
+                    } else {
+                        let cRooms = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                        let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
+                        let matchPlan = cPlans.includes(plan);
+                        let isRoomInPlanSettings = window.planMappings[plan] && window.planMappings[plan].includes(room);
+                        
+                        if (cRooms.length > 0) return matchPlan && cRooms.includes(room);
+                        else if (Object.keys(window.planMappings).length > 0) return matchPlan && isRoomInPlanSettings;
+                        else return matchPlan;
+                    }
                 });
+
+                let scheduledCounts = {};
+                let roomData = [];
+                if (window.interactiveViewMode === 'student') {
+                    roomData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
+                    roomData.forEach(slot => {
+                        let code = String(slot['รหัสวิชา'] || '').trim();
+                        if (existingData && slot.originalIndex === existingData.originalIndex) return;
+                        if (!scheduledCounts[code]) scheduledCounts[code] = 0;
+                        scheduledCounts[code]++;
+                    });
+                } else {
+                    roomData = window.interactiveSchData.filter(d => String(d['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === currentTeacher);
+                    roomData.forEach(slot => {
+                        let code = String(slot['รหัสวิชา'] || '').trim();
+                        if (existingData && slot.originalIndex === existingData.originalIndex) return;
+                        let key = code + (slot['ห้องเรียน'] ? '_' + slot['ห้องเรียน'] : '');
+                        if (!scheduledCounts[key]) scheduledCounts[key] = 0;
+                        scheduledCounts[key]++;
+                        
+                        if (!scheduledCounts[code]) scheduledCounts[code] = 0;
+                        scheduledCounts[code]++;
+                    });
+                }
 
                 let busyTeachers = new Set();
                 window.interactiveSchData.forEach(slot => {
                     if (slot['วัน'] === day && periodChks.includes(parseInt(slot['คาบที่']))) {
-                        if (existingData && slot.originalIndex === existingData.originalIndex) return; // ไม่นับตัวเอง
-                        if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).trim());
+                        if (existingData && slot.originalIndex === existingData.originalIndex) return;
+                        if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).replace(/\s+/g, ' ').trim());
                     }
                 });
+                
                 let optionsHtml = '';
                 targetCourses.forEach(c => {
                     let code = String(c['รหัสวิชา'] || '').trim();
                     let name = String(c['ชื่อวิชา'] || '').trim();
-                    let teacher = String(c['ชื่อครูผู้สอน'] || '').trim();
-                    let credit = parseFloat(c['หน่วยกิต']) || 0;
-                    let required = credit * 2; 
-                    let scheduled = scheduledCounts[code] || 0;
-                    let remaining = required - scheduled;
+                    let teacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                    let creditStr = String(c['หน่วยกิต'] || '').trim();
+                    let credit = parseFloat(creditStr);
+                    let required = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0; 
                     
+                    let scheduled = 0;
+                    if (window.interactiveViewMode === 'student') {
+                        scheduled = scheduledCounts[code] || 0;
+                    } else {
+                        if (room) {
+                            scheduled = scheduledCounts[code + '_' + room] || 0;
+                        } else {
+                            scheduled = scheduledCounts[code] || 0;
+                            let cRooms = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                            let numRooms = cRooms.length > 0 ? cRooms.length : 1;
+                            required = required * numRooms;
+                        }
+                    }
+                    
+                    let remaining = required - scheduled;
                     let isBusy = busyTeachers.has(teacher);
                     let isEditingThis = existingData && existingData['รหัสวิชา'] === code;
 
-                    // แสดงตัวเลือกก็ต่อเมื่อเหลือคาบ หรือเป็นวิชาที่กำลังแก้ไขอยู่
-                    if (remaining > 0 || isEditingThis) {
+                    // ถ้าเป็นโหมดครู แล้วเป็นตารางของครูคนนี้ ไม่ต้องขึ้นว่าติดสอนในคาบว่างของตัวเอง
+                    if (window.interactiveViewMode === 'teacher' && teacher === currentTeacher) {
+                        isBusy = false; 
+                    }
+
+                    if (required === 0 || remaining > 0 || isEditingThis) {
                         if (isBusy && !isEditingThis) {
                             optionsHtml += `<option value="${code}" disabled>${code} - ${name} (ครูติดสอน)</option>`;
                         } else {
-                            optionsHtml += `<option value="${code}">${code} - ${name} (เหลือ ${remaining} คาบ)</option>`;
+                            if (required === 0) {
+                                optionsHtml += `<option value="${code}">${code} - ${name}</option>`;
+                            } else {
+                                optionsHtml += `<option value="${code}">${code} - ${name} (เหลือ ${remaining} คาบ)</option>`;
+                            }
                         }
                     }
                 });
                 document.getElementById('dl_m_code').innerHTML = optionsHtml;
-                window.autoFillModalCourse(); // รีเฟรชข้อมูลชื่อวิชาและครู
-                // ----------------------------------------------------
+                window.autoFillModalCourse(); 
                 
-                // --- ประมวลผลตัวเลือกสถานที่เรียน (สร้าง Grid HTML) ---
+                // 2. ประมวลผลตัวเลือกสถานที่เรียน (สร้าง Grid HTML)
                 let allLocations = (window.interactiveSettings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
                 let busyLocations = new Set();
                 
                 window.interactiveSchData.forEach(slot => {
                     if (slot['วัน'] === day && periodChks.includes(parseInt(slot['คาบที่']))) {
-                        if (existingData && slot.originalIndex === existingData.originalIndex) return; // ไม่นับตัวเอง
+                        if (existingData && slot.originalIndex === existingData.originalIndex) return;
                         let loc = String(slot['สถานที่เรียน'] || '').trim();
                         if (loc && loc !== '-') busyLocations.add(loc);
                     }
@@ -3217,23 +3736,28 @@
                         return a.localeCompare(b);
                     });
 
-                    gridHtml = '<div class="flex flex-wrap items-stretch justify-center gap-2.5 w-full">';
+                    gridHtml = '<div class="flex flex-wrap items-stretch justify-center gap-3 w-full">';
                     groupKeys.forEach(gKey => {
-                        gridHtml += `<div class="bg-white p-2 rounded-lg shadow-sm border border-gray-200 flex-1 min-w-[140px] flex flex-col">
-                            <h4 class="font-bold text-navy border-b border-gold pb-1 mb-2 text-center text-sm">${gKey}</h4>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-1.5">`;
+                        // ปรับให้ flex-auto ยืดหยุ่นตามเนื้อหา และขยายขนาดคอลัมน์สำหรับห้องปฏิบัติการ
+                        let gridColsClass = gKey === "ห้องปฏิบัติการ" 
+                            ? "grid grid-cols-[repeat(auto-fit,minmax(110px,1fr))] gap-2" 
+                            : "grid grid-cols-[repeat(auto-fit,minmax(75px,1fr))] gap-1.5";
+                            
+                        gridHtml += `<div class="bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex-auto min-w-[180px] max-w-full flex flex-col">
+                            <h4 class="font-bold text-navy border-b border-gold pb-1.5 mb-3 text-center text-sm">${gKey}</h4>
+                            <div class="${gridColsClass}">`;
                         
                         groupedLocs[gKey].sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'})).forEach(loc => {
                             let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
                             if (busyLocations.has(loc) && !isEditingThisLoc) {
                                 gridHtml += `
-                                    <button type="button" disabled class="p-1 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[36px] shadow-sm relative overflow-hidden">
-                                        <span class="line-through z-10 text-[11px] truncate w-full px-0.5 text-center leading-tight">${loc}</span>
-                                        <span class="text-[9px] mt-0.5 text-red-600 bg-red-100 px-1 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
+                                    <button type="button" disabled class="p-1.5 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[40px] shadow-sm relative overflow-hidden">
+                                        <span class="line-through z-10 text-[11px] whitespace-normal break-words w-full px-1 text-center leading-snug">${loc}</span>
+                                        <span class="text-[9px] mt-1 text-red-600 bg-red-100 px-1.5 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
                                     </button>`;
                             } else {
                                 gridHtml += `
-                                    <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-1 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[36px] shadow-sm hover:shadow-md text-[11px] truncate w-full px-0.5 text-center leading-tight">
+                                    <button type="button" onclick="selectLocation('${loc.replace(/'/g, "\\'")}')" class="p-1.5 bg-white border border-gray-300 hover:border-gold hover:bg-lightgold hover:bg-opacity-20 hover:text-navy rounded text-gray-700 font-semibold transition duration-200 flex items-center justify-center min-h-[40px] shadow-sm hover:shadow-md text-[11px] whitespace-normal break-words w-full px-1 text-center leading-snug">
                                         ${loc}
                                     </button>`;
                             }
@@ -3244,7 +3768,6 @@
                 }
                 window.modalLocationHtml = gridHtml;
                 
-                // คืนค่าถ้าเป็นการแก้ไข
                 if (existingData) {
                     document.getElementById('m_location').value = existingData['สถานที่เรียน'] || '';
                 }
@@ -3252,16 +3775,61 @@
 
             // ฟังก์ชันเปิด Modal
             window.openSchModal = (day, period, existingData) => {
-                const room = document.getElementById('grid_room').value;
-                const plan = document.getElementById('grid_plan').value;
+                if (window.interactiveViewMode === 'student') {
+                    document.getElementById('m_room_plan_container').classList.add('hidden');
+                    document.getElementById('m_room').value = document.getElementById('grid_room').value;
+                    document.getElementById('m_plan').value = document.getElementById('grid_plan').value;
+                } else {
+                    document.getElementById('m_room_plan_container').classList.remove('hidden');
+                    document.getElementById('m_teacher').value = document.getElementById('grid_t_name').value;
+                    
+                    // สร้างตัวเลือก "ชั้น/ห้อง" ให้ตรงกับรายวิชาที่ครูคนนี้สอนเท่านั้น
+                    let currentTeacher = String(document.getElementById('grid_t_name').value || '').trim();
+                    let teacherRooms = new Set();
+                    
+                    window.interactiveCourses.forEach(c => {
+                        if (String(c['ชื่อครูผู้สอน'] || '').trim() === currentTeacher && String(c['ภาคเรียนที่'] || '').trim() === String(window.interactiveCurrentTerm).trim()) {
+                            // รองรับทั้งคอลัมน์ชื่อ "ชั้นที่สอน" และ "ชั้นที่เปิดสอน"
+                            let cRooms = (c['ชั้นที่สอน'] || c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                            let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
+                            
+                            cRooms.forEach(r => teacherRooms.add(r));
+                            
+                            // ถ้าวิชาระบุแค่แผนการเรียน ให้ดึงห้องในแผนนั้นมาแสดงด้วย
+                            if (cRooms.length === 0) {
+                                cPlans.forEach(p => {
+                                    if (window.planMappings[p]) {
+                                        window.planMappings[p].forEach(r => teacherRooms.add(r));
+                                    }
+                                });
+                            }
+                        }
+                    });
+                    
+                    let mRoomSelect = document.getElementById('m_room');
+                    let optionsHtml = '<option value="">-- เลือกห้องเรียน --</option>';
+                    if (teacherRooms.size > 0) {
+                        Array.from(teacherRooms).sort((a, b) => a.localeCompare(b, undefined, {numeric: true})).forEach(r => {
+                            optionsHtml += `<option value="${r}">${r}</option>`;
+                        });
+                    } else {
+                        // บังคับให้แสดงเฉพาะห้องที่มีในรายวิชา (ลบ fallback ที่ดึงมาทุกห้องออก)
+                        optionsHtml += '<option value="" disabled>-- ไม่มีห้องที่กำหนดในรายวิชา --</option>';
+                    }
+                    mRoomSelect.innerHTML = optionsHtml;
+                    
+                    // กรณีที่กดแก้ไข แล้วห้องเดิมไม่มีในลิสต์ (เผื่อการตั้งค่าถูกลบไป) ให้เพิ่มกลับเข้าไปชั่วคราว
+                    if (existingData && existingData['ห้องเรียน']) {
+                        let existingRoom = existingData['ห้องเรียน'];
+                        if (!teacherRooms.has(existingRoom)) {
+                             mRoomSelect.innerHTML += `<option value="${existingRoom}">${existingRoom}</option>`;
+                        }
+                    }
+                }
 
-                // ตั้งค่าค่าพื้นฐานที่ล็อคไว้
                 document.getElementById('m_day_display').innerText = day;
                 document.getElementById('m_day').value = day;
-                document.getElementById('m_room').value = room;
-                document.getElementById('m_plan').value = plan;
 
-                // สร้าง Checkbox คาบเรียน
                 let periodChecksHtml = Array.from({length: window.interactivePeriods}, (_, i) => `
                     <label class="flex items-center space-x-1 cursor-pointer bg-white px-2 py-1 rounded border border-gray-300 hover:bg-gray-100 transition">
                         <input type="checkbox" value="${i+1}" class="m-period-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="window.updateModalDropdowns(${existingData ? 'window.currentEditingData' : 'null'})">
@@ -3270,61 +3838,79 @@
                 `).join('');
                 document.getElementById('m_period_container').innerHTML = periodChecksHtml;
 
-                // ติ๊กคาบที่ถูกเลือก
                 const pChk = document.querySelector(`.m-period-chk[value="${period}"]`);
                 if(pChk) pChk.checked = true;
 
                 if (existingData) {
-                    window.currentEditingData = existingData; // เก็บไว้ใช้ตอน onchange checkbox
-                    // กรณีแก้ไข
+                    window.currentEditingData = existingData; 
                     document.getElementById('modalTitle').innerText = 'แก้ไขตารางสอน';
                     document.getElementById('m_original_id').value = existingData.originalIndex;
                     document.getElementById('m_creator').value = existingData['ผู้บันทึก'] || currentUser;
                     
+                    if (window.interactiveViewMode === 'teacher') {
+                        document.getElementById('m_room').value = existingData['ห้องเรียน'];
+                        document.getElementById('m_plan').value = existingData['แผนการเรียน'];
+                    }
+
                     window.updateModalDropdowns(existingData);
                     document.getElementById('m_code').value = existingData['รหัสวิชา'];
-                    window.autoFillModalCourse(); // เติมชื่อวิชาและครูอัตโนมัติ
+                    window.autoFillModalCourse(); 
                     document.getElementById('m_location').value = existingData['สถานที่เรียน'] || '';
                     document.getElementById('m_btn_delete').classList.remove('hidden');
                 } else {
                     window.currentEditingData = null;
-                    // กรณีเพิ่มใหม่
                     document.getElementById('modalTitle').innerText = 'เพิ่มรายวิชาในตาราง';
                     document.getElementById('m_original_id').value = '';
-                    document.getElementById('m_creator').value = currentUser; // ประทับชื่อผู้สร้างคนปัจจุบัน
+                    document.getElementById('m_creator').value = currentUser; 
                     
+                    if (window.interactiveViewMode === 'teacher') {
+                        document.getElementById('m_room').value = '';
+                        document.getElementById('m_plan').value = '';
+                    }
+
                     window.updateModalDropdowns();
                     document.getElementById('m_code').value = '';
                     document.getElementById('m_name').value = '';
-                    document.getElementById('m_teacher').value = '';
                     document.getElementById('m_location').value = '';
                     document.getElementById('m_btn_delete').classList.add('hidden');
                 }
 
                 document.getElementById('schModal').classList.remove('hidden');
-                // โฟกัสไปที่ช่องรหัสวิชาเมื่อเปิด
                 setTimeout(() => document.getElementById('m_code').focus(), 100);
             };
 
-            // ฟังก์ชันปิด Modal
             window.closeSchModal = () => {
                 document.getElementById('schModal').classList.add('hidden');
             };
 
-            // ฟังก์ชัน Auto-fill วิชาใน Modal
             window.autoFillModalCourse = () => {
                 let code = document.getElementById('m_code').value.trim();
                 let c = window.interactiveCourses.find(x => x['รหัสวิชา'] === code);
                 if(c) {
                     document.getElementById('m_name').value = c['ชื่อวิชา'];
-                    document.getElementById('m_teacher').value = c['ชื่อครูผู้สอน'];
+                    if (window.interactiveViewMode === 'student') {
+                        document.getElementById('m_teacher').value = c['ชื่อครูผู้สอน'];
+                    }
                 } else {
                     document.getElementById('m_name').value = '';
-                    document.getElementById('m_teacher').value = '';
+                    if (window.interactiveViewMode === 'student') {
+                        document.getElementById('m_teacher').value = '';
+                    }
+                }
+                
+                // ให้ระบบเลือกห้อง/แผนอัตโนมัติหากวิชานั้นล็อกมาแค่ห้องเดียว (โหมดครู)
+                if (window.interactiveViewMode === 'teacher' && c) {
+                    let cRooms = (c['ชั้นที่สอน'] || '').split(',').map(r => r.trim()).filter(r => r);
+                    let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
+                    if (cRooms.length === 1 && !document.getElementById('m_room').value) {
+                        document.getElementById('m_room').value = cRooms[0];
+                    }
+                    if (cPlans.length === 1 && !document.getElementById('m_plan').value) {
+                        document.getElementById('m_plan').value = cPlans[0];
+                    }
                 }
             };
 
-            // ฟังก์ชันลบข้อมูลพื้นหลัง (Background Delete)
             window.deleteSchModalSlot = async () => {
                 const rowIdStr = document.getElementById('m_original_id').value;
                 const rowIndex = parseInt(rowIdStr);
@@ -3333,19 +3919,16 @@
                 if(await Swal.fire({title: 'ยืนยันการลบลายวิชานี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
                     closeSchModal();
                     
-                    // ลบออกจากตารางหน้าเว็บชั่วคราวเพื่อให้ผู้ใช้ทำงานต่อได้ทันที
                     window.interactiveSchData = window.interactiveSchData.filter(item => item.originalIndex !== rowIndex);
                     refreshSchGrid();
 
                     window.pendingSyncCount++;
                     window.updateSyncStatus();
 
-                    // เรียก API ลบพื้นหลัง (ส่งพารามิเตอร์ true = ไม่โชว์ loader)
                     callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowIndex: rowIndex }, true)
                     .then(async (res) => {
                         window.pendingSyncCount--;
                         if(window.pendingSyncCount === 0) {
-                            // หากคิวว่างแล้วให้โหลด Data จริงๆ มาอีกครั้ง
                             let newData = await getCachedData('กำหนดตารางสอน', true, true);
                             window.interactiveSchData = newData.map((d, index) => ({...d, originalIndex: index}));
                             refreshSchGrid();
@@ -3359,79 +3942,71 @@
                 }
             };
 
-            // ฟังก์ชันบันทึกข้อมูลพื้นหลัง (Background Save)
             document.getElementById('modalSchForm').onsubmit = async (e) => {
                 e.preventDefault();
                 
                 const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
-                if (periodChks.length === 0) {
-                    Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
-                    return;
-                }
+                if (periodChks.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
                 
+                const room = document.getElementById('m_room').value;
+                const plan = document.getElementById('m_plan').value;
+                
+                if (window.interactiveViewMode === 'teacher') {
+                    if (!room) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้องให้ถูกต้อง', 'warning');
+                    if (!plan) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแผนการเรียน', 'warning');
+                }
+
                 if(!document.getElementById('m_name').value) {
-                    Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
-                    return;
+                    return Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
                 }
 
                 const rowIdStr = document.getElementById('m_original_id').value;
                 const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
-                
                 const day = document.getElementById('m_day').value;
                 const teacher = document.getElementById('m_teacher').value;
                 const location = document.getElementById('m_location').value.trim();
-                const room = document.getElementById('m_room').value;
-                const plan = document.getElementById('m_plan').value;
                 const code = document.getElementById('m_code').value;
 
-                // เพิ่มตัวเลือกลงระบบอัตโนมัติหากเป็นสถานที่ใหม่
                 if (location) {
                     let currentRooms = (window.interactiveSettings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
                     if (!currentRooms.includes(location)) {
                         currentRooms.push(location);
                         window.interactiveSettings.teaching_rooms = currentRooms.join(',');
                         window.interactiveLocationOpts = currentRooms.map(r => `<option value="${r}">${r}</option>`).join('');
-                        // อัปเดต dropdown ใน DOM อื่นๆ ที่เกี่ยวข้องด้วยถ้ามี
                         callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(window.interactiveSettings) }, isSettings: true }, true);
                     }
                 }
 
-                // --- ตรวจสอบข้อมูลชนกัน (Conflict Detection) แบบรัดกุมที่สุด ---
+                // --- ตรวจสอบข้อมูลชนกัน ---
                 let conflictMsg = [];
-                let currentCourseCount = 0; // ตัวแปรสำหรับนับจำนวนคาบที่ลงไปแล้วของวิชานี้
+                let currentCourseCount = 0;
 
                 for (let i = 0; i < window.interactiveSchData.length; i++) {
                     let s = window.interactiveSchData[i];
-                    if (rowId !== null && s.originalIndex === rowId) continue; // ข้ามตัวมันเองถ้าแก้
-
-                    // นับจำนวนคาบที่วิชานี้ถูกจัดลงตารางในห้องและแผนนี้ไปแล้ว
+                    if (rowId !== null && s.originalIndex === rowId) continue;
                     if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
                         currentCourseCount++;
                     }
                 }
 
-                // 1. ตรวจสอบโควต้าจำนวนคาบต่อสัปดาห์ (1 หน่วยกิต = 2 คาบ)
                 let courseInfo = window.interactiveCourses.find(c => String(c['รหัสวิชา'] || '').trim() === code);
                 if (courseInfo) {
                     let credit = parseFloat(courseInfo['หน่วยกิต']) || 0;
                     let maxPeriods = credit * 2;
-                    // นับรวมคาบที่จะกดเพิ่มเข้าไปใหม่ด้วย
                     if (maxPeriods > 0 && (currentCourseCount + periodChks.length) > maxPeriods) {
-                        conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${periodChks.length} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
+                        conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${periodChks.length} คาบ แต่จะเกินกำหนดของห้องนี้ (${maxPeriods} คาบ/สัปดาห์)`);
                     }
                 }
 
-                // 2. วนลูปเช็คการชนกันแยกตามคาบที่เลือก
                 periodChks.forEach(p => {
                     window.interactiveSchData.forEach(slot => {
-                        if (rowId !== null && slot.originalIndex === rowId) return; // ไม่นับตัวเอง
+                        if (rowId !== null && slot.originalIndex === rowId) return;
 
                         if (slot['วัน'] === day && parseInt(slot['คาบที่']) === p) {
                             let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
                             let sLocation = String(slot['สถานที่เรียน'] || '').trim();
                             let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
-                            // ตรวจสอบครูผู้สอนชนกัน
                             if (teacher !== '' && sTeacher === teacher) {
                                 let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
                                 if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
@@ -3441,12 +4016,10 @@
                                 }
                             }
                             
-                            // ตรวจสอบสถานที่ชนกัน (ห้องที่ใช้สอนซ้ำซ้อน)
                             if (location !== '' && sLocation === location && sLocation !== '-') {
                                 conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${location}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
                             }
                             
-                            // ตรวจสอบการลงวิชาซ้ำในห้องและแผนเดียวกัน
                             if (sRoom === room && slot['แผนการเรียน'] === plan) {
                                 conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
                             }
@@ -3464,11 +4037,9 @@
                     });
                     return; 
                 }
-                // --- สิ้นสุดการตรวจสอบ ---
                 
                 closeSchModal();
 
-                // วนลูปบันทึกตามจำนวนคาบที่เลือก
                 periodChks.forEach((p, idx) => {
                     const data = {
                         'ห้องเรียน': room, 
@@ -3485,7 +4056,6 @@
                     
                     const currentRowId = (idx === 0) ? rowId : null;
 
-                    // Optimistic Update: แก้ไขตารางชั่วคราวให้ผู้ใช้เห็นทันที
                     if (currentRowId !== null) {
                         let index = window.interactiveSchData.findIndex(item => item.originalIndex === currentRowId);
                         if(index !== -1) window.interactiveSchData[index] = { ...data, originalIndex: currentRowId, isPending: true };
@@ -3496,7 +4066,6 @@
                     window.pendingSyncCount++;
                     window.updateSyncStatus();
 
-                    // เรียก API บันทึกพื้นหลัง
                     callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: currentRowId, data: data }, true)
                     .then(async (res) => {
                         window.pendingSyncCount--;
@@ -3513,7 +4082,6 @@
                     });
                 });
                 
-                // รีเฟรชตารางหลังจัดเตรียม Optimistic Update เสร็จ
                 refreshSchGrid();
             };
         }
@@ -3524,7 +4092,7 @@
                 <div class="bg-white p-10 rounded-xl shadow-md text-center max-w-lg mx-auto mt-10">
                     <i class="fas fa-cogs text-6xl text-navy mb-6"></i>
                     <h3 class="text-2xl font-bold text-gray-800 mb-2">ประมวลผลตารางสอน</h3>
-                    <p class="text-gray-600 mb-6">ระบบจะทำการรวบรวมข้อมูลจาก ข้อมูลรายวิชา, การตั้งค่า, กำหนดตารางสอน เพื่อสร้างเป็นรูปแบบตารางพร้อมแสดงผลและดาวน์โหลด</p>
+                    <p class="text-gray-600 mb-6">ระบบจะทำการรวบรวมข้อมูลจาก อัตรากำลังภาระงานสอน, การตั้งค่า, กำหนดตารางสอน เพื่อสร้างเป็นรูปแบบตารางพร้อมแสดงผลและดาวน์โหลด</p>
                     <button onclick="executeProcess()" class="bg-gold text-navy font-bold text-lg px-8 py-3 rounded-full hover:bg-opacity-80 shadow-lg transform transition hover:scale-105">
                         <i class="fas fa-play mr-2"></i> เริ่มประมวลผลทันที
                     </button>
@@ -3540,7 +4108,7 @@
             }
         }
 
-        // --- 7. ดาวน์โหลดตารางสอน ---
+         // --- 7. ดาวน์โหลดตารางสอน ---
         async function renderDownload(container) {
             // โหลด 3 ชีทพร้อมกันแบบขนาน (Parallel Loading) ช่วยลดเวลาได้ 3 เท่า
             let [settingsArr, teachers, rawData] = await Promise.all([
@@ -3884,49 +4452,48 @@
                                 </thead>
                                 <tbody>${trs}</tbody>
                             </table>
-                            <div class="mt-4 text-right text-[10px] text-gray-500">จัดทำโดย ระบบจัดตารางสอนออนไลน์ - ${schoolName} | พัฒนาโดย ครูมูฮัมหมัดตัซกีน บาราเฮง ครูโรงเรียนนราสิกขาลัย</div>
+                            <div class="mt-4 text-right text-[10px] text-gray-500">
+                                ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')} | พัฒนาโดย ครูมูฮัมหมัดตัซกีน บาราเฮง
+                            </div>
                         </div>
                     `;
                 });
 
                 document.getElementById('timetableCanvas').innerHTML = allHtml;
-            }
+            };
 
             window.downloadAsJPG = async () => {
                 const pages = document.querySelectorAll('.timetable-page');
-                if(pages.length === 0) return Swal.fire('แจ้งเตือน', 'ไม่มีข้อมูลตารางให้ดาวน์โหลด', 'warning');
+                if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงตาราง" ก่อนดาวน์โหลด', 'warning');
+
+                showLoading(true);
                 
-                // แสดงป๊อปอัพโหลดระหว่างกำลังแคปภาพ
-                Swal.fire({
-                    title: 'กำลังเตรียมดาวน์โหลด...',
-                    text: 'กรุณารอสักครู่ ระบบกำลังสร้างภาพและดาวน์โหลดตารางทั้งหมด ' + pages.length + ' ภาพ',
-                    allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading();
-                    }
-                });
-
-                // วนลูปดาวน์โหลดทีละภาพแบบหน่วงเวลา เพื่อไม่ให้เบราว์เซอร์บล็อค
-                for(let i = 0; i < pages.length; i++) {
-                    const page = pages[i];
-                    const filename = page.getAttribute('data-filename') || `Timetable_${Date.now()}_${i+1}.jpg`;
-
-                    try {
-                        const canvas = await html2canvas(page, { scale: 2, backgroundColor: '#ffffff' });
+                try {
+                    for (let i = 0; i < pages.length; i++) {
+                        const page = pages[i];
+                        const filename = page.getAttribute('data-filename') || `timetable_${i+1}.jpg`;
+                        
+                        const canvas = await html2canvas(page, {
+                            scale: 2, 
+                            backgroundColor: '#ffffff',
+                            useCORS: true 
+                        });
+                        
                         const link = document.createElement('a');
                         link.download = filename;
                         link.href = canvas.toDataURL('image/jpeg', 0.9);
                         link.click();
                         
-                        // หน่วงเวลา 0.5 วินาที ต่อการดาวน์โหลด 1 รูป
-                        await new Promise(resolve => setTimeout(resolve, 500));
-                    } catch(err) {
-                        console.error("Error generating image: ", err);
+                        await new Promise(r => setTimeout(r, 500));
                     }
+                    showLoading(false);
+                    Swal.fire('สำเร็จ', `ดาวน์โหลดตารางจำนวน ${pages.length} ไฟล์ เรียบร้อยแล้ว`, 'success');
+                } catch (error) {
+                    showLoading(false);
+                    console.error(error);
+                    Swal.fire('ข้อผิดพลาด', 'ไม่สามารถดาวน์โหลดตารางเป็นรูปภาพได้: ' + error.message, 'error');
                 }
-                
-                Swal.fire('สำเร็จ', 'ดาวน์โหลดตารางเสร็จสิ้นทั้งหมด ' + pages.length + ' ไฟล์', 'success');
-            }
+            };
         }
 
         // --- 8. ประมวลคำสั่งสอน ---
