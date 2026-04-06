@@ -595,7 +595,7 @@
                         <h3 class="text-2xl font-bold text-navy">ตั้งค่าบัญชีผู้ใช้</h3>
                         <p class="text-gray-500 text-sm mt-1">เปลี่ยนชื่อผู้ใช้และรหัสผ่านสำหรับเข้าสู่ระบบ</p>
                     </div>
-                    <form id="profileForm" class="space-y-5">
+                    <form id="profileForm" class="space-y-5" onsubmit="event.preventDefault(); window.submitProfile();">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-สกุล (ไม่สามารถแก้ไขได้)</label>
                             <input type="text" value="${myData['ชื่อ-สกุล']}" readonly class="w-full border border-gray-300 rounded-lg p-2.5 bg-gray-100 text-gray-500 cursor-not-allowed">
@@ -623,8 +623,7 @@
                 </div>
             `;
 
-            document.getElementById('profileForm').onsubmit = async (e) => {
-                e.preventDefault();
+            window.submitProfile = async () => {
                 const newUsername = document.getElementById('p_username').value.trim();
                 const newPassword = document.getElementById('p_password').value.trim();
 
@@ -694,7 +693,7 @@
                                 <i class="fas fa-times text-xl"></i>
                             </button>
                         </div>
-                        <form id="teacherForm" class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <form id="teacherForm" class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4" onsubmit="event.preventDefault(); window.submitTeacher();">
                             <input type="hidden" id="t_id">
                             <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1">ชื่อ-สกุล</label><input type="text" id="t_name" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
                             <div><label class="block text-sm font-medium mb-1">กลุ่มสาระ</label><select id="t_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${groupOptions}</select></div>
@@ -737,8 +736,7 @@
             };
             window.renderTeacherRows(teachers);
 
-            document.getElementById('teacherForm').onsubmit = async (e) => {
-                e.preventDefault();
+            window.submitTeacher = async () => {
                 const rowIdStr = document.getElementById('t_id').value;
                 const rowId = rowIdStr !== "" ? parseInt(rowIdStr) : null;
                 const data = {
@@ -762,6 +760,7 @@
                     }
                 } catch(e) {
                     showLoading(false);
+                    Swal.fire('ข้อผิดพลาด', e.message || 'บันทึกข้อมูลล้มเหลว', 'error');
                 }
             };
 
@@ -840,7 +839,10 @@
             let currentTerm = window.courseCurrentTerm;
             
             let groupOptions = subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('');
-            let teacherOptions = teachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
+            let teacherOptions = teachers.map(t => {
+                let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
+                return `<option value="${cleanName}">${cleanName}</option>`;
+            }).join('');
 
             window.pendingCourseSync = 0; 
             window.tempCourseList = []; 
@@ -909,7 +911,7 @@
                             </button>
                         </div>
                         <div class="p-6 overflow-y-auto">
-                            <form id="courseForm" class="text-sm">
+                            <form id="courseForm" class="text-sm" onsubmit="event.preventDefault(); window.submitCourse();">
                                 <input type="hidden" id="c_id">
                                 <input type="hidden" id="c_edit_mode" value="false">
                                 
@@ -983,7 +985,7 @@
                                 <div class="mt-6 flex justify-end space-x-2 border-t pt-4">
                                     <button type="button" onclick="closeCourseModal()" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">ปิดหน้าต่าง</button>
                                     <button type="button" id="btn_save_edit" onclick="saveEditedCourse()" class="bg-gold text-navy font-bold px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md hidden">บันทึกการแก้ไข</button>
-                                    <button type="button" id="btn_save_batch" onclick="saveBatchCourses()" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึกข้อมูลเข้าสู่ระบบ</button>
+                                    <button type="submit" id="btn_save_batch" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึกข้อมูลเข้าสู่ระบบ</button>
                                 </div>
                             </form>
                         </div>
@@ -1168,6 +1170,10 @@
                 window.renderTempCourseTable();
             };
 
+            window.submitCourse = () => {
+                window.saveBatchCourses();
+            };
+
             window.saveBatchCourses = () => {
                 if (window.tempCourseList.length === 0) {
                     return Swal.fire('แจ้งเตือน', 'ไม่มีรายการให้บันทึก กรุณาเพิ่มข้อมูลลงตารางด้านล่างก่อน', 'warning');
@@ -1264,8 +1270,6 @@
                 }
             };
 
-            document.getElementById('courseForm').onsubmit = (e) => { e.preventDefault(); };
-
             window.editCourse = (origIdx) => {
                 let data = window.courseDataList.find(c => String(c.originalIndex) === String(origIdx));
                 if(!data) return;
@@ -1312,8 +1316,7 @@
                 document.getElementById('courseForm').reset(); 
                 document.getElementById('c_id').value = ''; 
                 document.getElementById('c_term').value = window.courseCurrentTerm; 
-                document.getElementById('c_btn_save').innerText = 'บันทึก'; 
-                document.getElementById('c_btn_cancel').classList.add('hidden'); 
+                document.getElementById('btn_save_edit').classList.add('hidden'); 
             }
             
             window.updateFilterTeacherList = () => {
@@ -1324,9 +1327,12 @@
                 let filteredTeachers = filterGroup === 'all' ? window.allTeachersList : window.allTeachersList.filter(t => t['กลุ่มสาระการเรียนรู้'] === filterGroup);
                 
                 teacherSelect.innerHTML = '<option value="all">ทุกครูผู้สอน</option>' + 
-                    filteredTeachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
+                    filteredTeachers.map(t => {
+                        let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
+                        return `<option value="${cleanName}">${cleanName}</option>`;
+                    }).join('');
                 
-                if (filteredTeachers.some(t => t['ชื่อ-สกุล'] === currentTeacher)) {
+                if (filteredTeachers.some(t => String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim() === currentTeacher)) {
                     teacherSelect.value = currentTeacher;
                 } else {
                     teacherSelect.value = 'all';
@@ -1342,9 +1348,12 @@
                 let filteredTeachers = group ? window.allTeachersList.filter(t => t['กลุ่มสาระการเรียนรู้'] === group) : window.allTeachersList;
                 
                 teacherSelect.innerHTML = '<option value="">เลือก...</option>' + 
-                    filteredTeachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
+                    filteredTeachers.map(t => {
+                        let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
+                        return `<option value="${cleanName}">${cleanName}</option>`;
+                    }).join('');
                     
-                if (filteredTeachers.some(t => t['ชื่อ-สกุล'] === currentTeacher)) {
+                if (filteredTeachers.some(t => String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim() === currentTeacher)) {
                     teacherSelect.value = currentTeacher;
                 } else {
                     teacherSelect.value = '';
@@ -1360,7 +1369,12 @@
                 window.filteredCourseList = window.courseDataList.filter(c => {
                     let matchGroup = filterGroup === 'all' || c['กลุ่มสาระการเรียนรู้'] === filterGroup;
                     let matchTerm = filterTerm === 'all' || String(c['ภาคเรียนที่']).trim() === String(filterTerm).trim();
-                    let matchTeacher = filterTeacher === 'all' || c['ชื่อครูผู้สอน'] === filterTeacher;
+                    
+                    // ปรับปรุงการเปรียบเทียบชื่อครูโดยล้างช่องว่างส่วนเกินออกก่อน
+                    let cTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                    let fTeacher = String(filterTeacher || '').replace(/\s+/g, ' ').trim();
+                    let matchTeacher = filterTeacher === 'all' || cTeacher === fTeacher;
+                    
                     let matchGrade = true;
                     if (filterGrade !== 'all') {
                         let cLevels = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim());
@@ -1577,9 +1591,15 @@
             let planOptionsHtml = uniquePlans.map(p => `<option value="${p}">`).join('');
             let roomOptionsHtml = roomsList.map(r => `<option value="${r}">`).join('');
 
+            // กรองเอา URL หรือที่อยู่ไฟล์ที่เผลอบันทึกผิดพลาดออกจากการตั้งค่าสถานที่เรียน
+            let safeTeachingRooms = (settings.teaching_rooms || '').split(',')
+                .map(r => r.trim())
+                .filter(r => r && !r.startsWith('file://') && !r.startsWith('http://') && !r.startsWith('https://'))
+                .join(', ');
+
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md mb-6">
-                    <form id="settingsForm" class="space-y-6 text-sm">
+                    <form id="settingsForm" class="space-y-6 text-sm" onsubmit="event.preventDefault(); window.submitSettings();">
                         <!-- การตั้งค่าการเปิด-ปิดเมนูใช้งาน -->
                         <div class="bg-blue-50 border border-blue-200 p-4 rounded-lg">
                             <h4 class="font-bold text-navy border-b border-blue-200 pb-1 mb-3">ตั้งค่าการเปิด-ปิดเมนูใช้งาน</h4>
@@ -1614,16 +1634,19 @@
                         <!-- การตั้งค่าโลโก้ -->
                         <div class="mt-6">
                             <h4 class="font-bold text-navy border-b pb-1 mb-3">ตั้งค่าโลโก้ระบบ</h4>
-                            <div class="flex items-center space-x-4">
-                                <div class="w-24 h-24 border rounded bg-gray-50 flex items-center justify-center overflow-hidden">
+                            <div class="flex flex-col md:flex-row items-start md:items-center space-y-4 md:space-y-0 md:space-x-4">
+                                <div class="w-24 h-24 border border-gray-300 rounded bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
                                     <img id="s_logo_preview" src="${currentLogo}" class="max-w-full max-h-full object-contain">
                                 </div>
-                                <div>
-                                    <input type="file" id="s_logo_upload" accept="image/*" class="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-navy file:text-white hover:file:bg-opacity-90 cursor-pointer">
-                                    <p class="text-xs text-gray-500 mt-2">ไฟล์รูปภาพ (PNG, JPG) ระบบจะปรับขนาดและบีบอัดให้อัตโนมัติ</p>
+                                <div class="flex-1 w-full">
+                                    <label class="block text-xs text-gray-600 mb-1">ลิงก์รูปภาพโลโก้ (URL) แนะนำให้ใช้ลิงก์แทนการอัปโหลด</label>
+                                    <input type="text" id="s_logo_url" value="${currentLogo.startsWith('data:image') ? '' : currentLogo}" class="w-full border rounded p-2 focus:border-gold outline-none text-xs mb-2" placeholder="วางลิงก์รูปภาพ (https://...)" oninput="document.getElementById('s_logo_preview').src = this.value || document.getElementById('s_logo_base64').value || '${defaultLogo}'">
+                                    
+                                    <input type="file" id="s_logo_upload" accept="image/*" onchange="window.handleLogoUpload(event)" class="text-sm text-gray-500 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-navy file:text-white hover:file:bg-opacity-90 cursor-pointer">
+                                    <p class="text-[10px] text-red-500 mt-1">*เพื่อป้องกันปัญหาระบบค้าง ควรใช้ "ลิงก์รูปภาพ (URL)" แทนการอัปโหลดไฟล์</p>
                                 </div>
                             </div>
-                            <input type="hidden" id="s_logo_base64" value="${currentLogo}">
+                            <input type="hidden" id="s_logo_base64" value="${currentLogo.startsWith('data:image') ? currentLogo : ''}">
                         </div>
 
                         <!-- โครงสร้างเวลา -->
@@ -1747,7 +1770,7 @@
                                     <i class="fas fa-trash mr-1"></i> ล้างข้อมูล
                                 </button>
                             </div>
-                            <textarea id="s_teaching_rooms" rows="3" class="w-full border rounded p-2" placeholder="124, ห้องคอม 1, สนามกังเทียม...">${settings.teaching_rooms || ''}</textarea>
+                            <textarea id="s_teaching_rooms" rows="3" class="w-full border rounded p-2" placeholder="124, ห้องคอม 1, สนามกังเทียม...">${safeTeachingRooms}</textarea>
                             <p class="text-xs text-gray-500 mt-1">*สามารถแก้ไขข้อความในช่องนี้ได้โดยตรง ข้อมูลต้องคั่นด้วยเครื่องหมายลูกน้ำ (,)</p>
                         </div>
 
@@ -1756,8 +1779,7 @@
                 </div>
             `;
 
-            // Handle Logo Upload and Compression
-            document.getElementById('s_logo_upload').addEventListener('change', function(e) {
+            window.handleLogoUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
 
@@ -1766,8 +1788,8 @@
                     const img = new Image();
                     img.onload = function() {
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 300; 
-                        const MAX_HEIGHT = 300;
+                        const MAX_WIDTH = 120; 
+                        const MAX_HEIGHT = 120;
                         let width = img.width;
                         let height = img.height;
 
@@ -1785,16 +1807,26 @@
                         canvas.width = width;
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
+                        
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, width, height);
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        const dataUrl = canvas.toDataURL('image/png', 0.8);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+                        
+                        if (dataUrl.length > 25000) {
+                            Swal.fire('ขนาดไฟล์ใหญ่เกินไป', 'รูปภาพของคุณมีความละเอียดสูงเกินกว่าระบบจะรองรับได้ กรุณาคัดลอกลิงก์รูป (URL) มาวางในช่องด้านบนแทนครับ', 'warning');
+                            return;
+                        }
+                        
+                        document.getElementById('s_logo_url').value = ''; 
                         document.getElementById('s_logo_preview').src = dataUrl;
                         document.getElementById('s_logo_base64').value = dataUrl;
                     }
                     img.src = event.target.result;
                 }
                 reader.readAsDataURL(file);
-            });
+            };
 
             window.addRoomsToTextarea = () => {
                 const grade = document.getElementById('s_grade_level').value;
@@ -1821,7 +1853,14 @@
             window.addTeachingRoom = () => {
                 const input = document.getElementById('s_teaching_room_input');
                 const roomName = input.value.trim();
+                
                 if (!roomName) return;
+
+                if (roomName.startsWith('file://') || roomName.startsWith('http://') || roomName.startsWith('https://')) {
+                    Swal.fire('ข้อมูลไม่ถูกต้อง', 'ไม่สามารถเพิ่มลิงก์หรือที่อยู่ไฟล์เป็นสถานที่เรียนได้', 'warning');
+                    input.value = '';
+                    return;
+                }
 
                 const textarea = document.getElementById('s_teaching_rooms');
                 let currentRooms = textarea.value.split(',').map(r => r.trim()).filter(r => r);
@@ -1830,7 +1869,7 @@
                     currentRooms.push(roomName);
                 }
 
-                textarea.value = currentRooms.join(',');
+                textarea.value = currentRooms.join(', ');
                 input.value = ''; 
             };
 
@@ -1885,8 +1924,23 @@
                 document.getElementById('s_learning_plans').value = '';
             };
 
-            document.getElementById('settingsForm').onsubmit = async (e) => {
-                e.preventDefault();
+            window.submitSettings = async () => {
+                let urlInput = document.getElementById('s_logo_url').value.trim();
+                let base64Input = document.getElementById('s_logo_base64').value;
+                let finalLogo = urlInput ? urlInput : (base64Input || defaultLogo);
+
+                if (finalLogo.length > 35000 && finalLogo.startsWith('data:image')) {
+                    Swal.fire('ข้อผิดพลาด', 'รูปภาพโลโก้เดิมมีขนาดใหญ่เกินข้อจำกัด กรุณาวางลิงก์รูปภาพ (URL) แทนครับ', 'error');
+                    return;
+                }
+
+                // ทำความสะอาดข้อมูลสถานที่เรียน กรองเอาที่อยู่ไฟล์ (file://, http) ออกก่อนบันทึก
+                let rawTeachingRooms = document.getElementById('s_teaching_rooms').value;
+                let cleanTeachingRooms = rawTeachingRooms.split(',')
+                    .map(r => r.trim())
+                    .filter(r => r && !r.startsWith('file://') && !r.startsWith('http://') && !r.startsWith('https://'))
+                    .join(',');
+
                 const data = {
                     menu_courses: document.getElementById('s_menu_courses').checked,
                     menu_create: document.getElementById('s_menu_create').checked,
@@ -1899,23 +1953,32 @@
                     show_code: document.getElementById('s_show_code').checked, show_name: document.getElementById('s_show_name').checked,
                     show_teacher: document.getElementById('s_show_teacher').checked, show_room: document.getElementById('s_show_room').checked,
                     rooms: document.getElementById('s_rooms').value,
-                    teaching_rooms: document.getElementById('s_teaching_rooms').value,
+                    teaching_rooms: cleanTeachingRooms,
                     learning_plans: document.getElementById('s_learning_plans').value,
-                    logo: document.getElementById('s_logo_base64').value
+                    logo: finalLogo
                 };
+                
                 try {
-                    let res = await callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(data) }, isSettings: true });
+                    showLoading(true, 'กำลังบันทึกการตั้งค่า...');
+                    
+                    let settingsArr = await getCachedData('การตั้งค่า');
+                    let currentSettings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {};
+                    const mergedData = { ...currentSettings, ...data };
+
+                    let res = await callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(mergedData) }, isSettings: true });
+                    
                     if(res) {
                         await getCachedData('การตั้งค่า', true); 
-                        window.appSettings = data; // อัปเดตตัวแปร Global ทันที
+                        window.appSettings = mergedData; 
                         
-                        window.updateAllLogos(data.logo); 
-                        window.updateAllSchoolNames(data.school_name); 
-                        if(data.learning_plans) {
-                            learningPlans = extractPlanNames(data.learning_plans);
+                        window.updateAllLogos(mergedData.logo); 
+                        window.updateAllSchoolNames(mergedData.school_name); 
+                        if(mergedData.learning_plans) {
+                            learningPlans = extractPlanNames(mergedData.learning_plans);
                         }
                         
                         await buildMenu();
+                        showLoading(false);
                         
                         Swal.fire('สำเร็จ', 'บันทึกการตั้งค่าเรียบร้อย', 'success').then(() => {
                              if(document.querySelector('.nav-link.bg-gold') && document.querySelector('.nav-link.bg-gold').dataset.page === 'dashboard') {
@@ -1924,7 +1987,9 @@
                         });
                     }
                 } catch(e) {
-                    Swal.fire('ข้อผิดพลาด', 'บันทึกการตั้งค่าล้มเหลว', 'error');
+                    showLoading(false);
+                    console.error('Settings Save Error:', e);
+                    Swal.fire('ข้อผิดพลาด', 'บันทึกการตั้งค่าล้มเหลว: ' + (e.message || 'การเชื่อมต่อถูกขัดจังหวะ'), 'error');
                 }
             };
         }
@@ -4086,11 +4151,14 @@
                     document.getElementById('m_room_plan_container').classList.remove('hidden');
                     document.getElementById('m_teacher').value = document.getElementById('grid_t_name').value;
                     
-                    let currentTeacher = String(document.getElementById('grid_t_name').value || '').trim();
+                    let currentTeacher = String(document.getElementById('grid_t_name').value || '').replace(/\s+/g, ' ').trim();
                     let teacherRooms = new Set();
                     
                     window.interactiveCourses.forEach(c => {
-                        if (String(c['ชื่อครูผู้สอน'] || '').trim() === currentTeacher && String(c['ภาคเรียนที่'] || '').trim() === String(window.interactiveCurrentTerm).trim()) {
+                        let courseTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                        let courseTerm = String(c['ภาคเรียนที่'] || '').trim();
+                        
+                        if (courseTeacher === currentTeacher && courseTerm === String(window.interactiveCurrentTerm).trim()) {
                             let cRooms = (c['ชั้นที่สอน'] || c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
                             let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
                             
@@ -4241,48 +4309,108 @@
                 }
             };
 
+            const processSaveDataAsync = async (data, rowId) => {
+                if (rowId !== null) {
+                    let index = window.interactiveSchData.findIndex(item => String(item.originalIndex) === String(rowId));
+                    if(index !== -1) window.interactiveSchData[index] = { ...data, originalIndex: rowId, isPending: true };
+                } else {
+                    window.interactiveSchData.push({ ...data, originalIndex: 'temp_' + Date.now() + Math.random(), isPending: true });
+                }
+                window.refreshSchGrid();
+
+                window.pendingSyncCount++;
+                window.updateSyncStatus();
+
+                try {
+                    await callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: (rowId !== null && !String(rowId).startsWith('temp_')) ? parseInt(rowId) : null, data: data }, true);
+                    
+                    window.pendingSyncCount--;
+                    if(window.pendingSyncCount === 0) {
+                        let newData = await getCachedData('กำหนดตารางสอน', true, true);
+                        window.interactiveSchData = newData.map((d, index) => ({...d, originalIndex: index}));
+                        window.refreshSchGrid();
+                    }
+                    window.updateSyncStatus();
+                } catch(err) {
+                    window.pendingSyncCount--;
+                    window.updateSyncStatus();
+                    Swal.fire('ข้อผิดพลาด', err.message || 'การบันทึกข้อมูลล้มเหลว', 'error');
+                    window.forceRefreshSchGrid(true); 
+                    throw err; 
+                }
+            };
+
             document.getElementById('modalSchForm').onsubmit = async (e) => {
                 e.preventDefault();
                 
-                const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
-                if (periodChks.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
+                const submitBtn = e.target.querySelector('button[type="submit"]');
+                if(submitBtn) submitBtn.disabled = true;
                 
-                const room = document.getElementById('m_room').value;
-                const plan = document.getElementById('m_plan').value;
+                const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
+                if (periodChks.length === 0) {
+                    if(submitBtn) submitBtn.disabled = false;
+                    return Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
+                }
+                
+                const room = document.getElementById('m_room').value.trim();
+                const plan = document.getElementById('m_plan').value.trim();
                 
                 if (window.interactiveViewMode === 'teacher') {
-                    if (!room) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้องให้ถูกต้อง', 'warning');
-                    if (!plan) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแผนการเรียน', 'warning');
+                    if (!room) {
+                        if(submitBtn) submitBtn.disabled = false;
+                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้องให้ถูกต้อง', 'warning');
+                    }
+                    if (!plan) {
+                        if(submitBtn) submitBtn.disabled = false;
+                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแผนการเรียน', 'warning');
+                    }
                 }
 
                 if(!document.getElementById('m_name').value) {
+                    if(submitBtn) submitBtn.disabled = false;
                     return Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
                 }
 
                 const rowIdStr = document.getElementById('m_original_id').value;
                 const rowId = rowIdStr !== "" ? rowIdStr : null;
-                const day = document.getElementById('m_day').value;
-                const teacher = document.getElementById('m_teacher').value;
-                const location = document.getElementById('m_location').value.trim();
-                const code = document.getElementById('m_code').value;
+                const day = document.getElementById('m_day').value.trim();
+                const teacher = document.getElementById('m_teacher').value.trim();
+                const locationVal = document.getElementById('m_location').value.trim();
+                const code = document.getElementById('m_code').value.trim();
 
-                if (location) {
-                    let currentRooms = (window.interactiveSettings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
-                    if (!currentRooms.includes(location)) {
-                        currentRooms.push(location);
-                        window.interactiveSettings.teaching_rooms = currentRooms.join(',');
-                        window.interactiveLocationOpts = currentRooms.map(r => `<option value="${r}">${r}</option>`).join('');
-                        callAPI('saveData', { sheetName: 'การตั้งค่า', rowId: 0, data: { 'JSON_DATA': JSON.stringify(window.interactiveSettings) }, isSettings: true }, true);
-                    }
+                // --- เพิ่มระบบตรวจสอบข้อมูลล่าสุด (Concurrency Check) เพื่อป้องกันการบันทึกชนกัน ---
+                Swal.fire({
+                    title: 'กำลังตรวจสอบคิวว่าง...',
+                    text: 'เพื่อป้องกันการบันทึกข้อมูลชนกันกับผู้อื่น',
+                    allowOutsideClick: false,
+                    didOpen: () => { Swal.showLoading(); }
+                });
+
+                let latestData = [];
+                try {
+                    delete cachePromises['กำหนดตารางสอน'];
+                    let rawData = await getCachedData('กำหนดตารางสอน', true, true);
+                    latestData = rawData.map((d, index) => ({...d, originalIndex: index}));
+                    
+                    window.interactiveSchData.filter(d => d.isPending).forEach(pendingItem => {
+                        latestData.push(pendingItem);
+                    });
+                    
+                    window.interactiveSchData = latestData;
+                    window.refreshSchGrid();
+                } catch(err) {
+                    Swal.close();
+                    if(submitBtn) submitBtn.disabled = false;
+                    return Swal.fire('ข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบได้ กรุณาลองใหม่', 'error');
                 }
 
                 let conflictMsg = [];
                 let currentCourseCount = 0;
 
-                for (let i = 0; i < window.interactiveSchData.length; i++) {
-                    let s = window.interactiveSchData[i];
+                for (let i = 0; i < latestData.length; i++) {
+                    let s = latestData[i];
                     if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
-                    if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
+                    if (String(s['ห้องเรียน'] || '').trim() === room && String(s['รหัสวิชา'] || '').trim() === code) {
                         currentCourseCount++;
                     }
                 }
@@ -4298,38 +4426,41 @@
                 }
 
                 periodChks.forEach(p => {
-                    window.interactiveSchData.forEach(slot => {
+                    latestData.forEach(slot => {
                         if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
 
-                        if (slot['วัน'] === day && parseInt(slot['คาบที่']) === p) {
+                        if (String(slot['วัน'] || '').trim() === day && parseInt(slot['คาบที่']) === p) {
                             let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
                             let sLocation = String(slot['สถานที่เรียน'] || '').trim();
                             let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
                             if (teacher !== '' && sTeacher === teacher) {
                                 let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
-                                if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
+                                if (String(slot['รหัสวิชา'] || '').trim() === 'กิจกรรม' || sRoom === '-') {
                                     conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
                                 } else {
                                     conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
                                 }
                             }
                             
-                            if (location !== '' && sLocation === location && sLocation !== '-') {
-                                conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${location}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
+                            if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
+                                conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
                             }
                             
-                            if (sRoom === room && slot['แผนการเรียน'] === plan) {
+                            if (sRoom !== '' && sRoom !== '-' && sRoom === room) {
                                 conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
                             }
                         }
                     });
                 });
 
+                Swal.close(); 
+
                 if (conflictMsg.length > 0) {
+                    if(submitBtn) submitBtn.disabled = false;
                     Swal.fire({
                         title: 'พบข้อมูลชนกัน!',
-                        html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2">' + conflictMsg.join('<br>') + '</div>',
+                        html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2"><b>ระบบตรวจพบการซ้ำซ้อน:</b><br>' + conflictMsg.join('<br>') + '</div>',
                         icon: 'error',
                         confirmButtonColor: '#1A2942',
                         confirmButtonText: 'กลับไปแก้ไข'
@@ -4348,40 +4479,35 @@
                 }
 
                 window.closeSchModal(); 
+                if(submitBtn) submitBtn.disabled = false;
                 
                 // ถอด showLoading ออก รันแบบเบื้องหลัง (Background Task) สำหรับหน้าจัดตารางสอน
                 (async () => {
                     let tempIdx = 0;
                     let hasError = false;
                     
-                    for (const d of dayChks) {
-                        for (const p of periodChks) {
-                            if (hasError) break; 
+                    let d = day;
+                    for (const p of periodChks) {
+                        if (hasError) break; 
 
-                            const data = {
-                                'ห้องเรียน': room, 'แผนการเรียน': plan,
-                                'วัน': d, 'คาบที่': p,
-                                'รหัสวิชา': code, 'ชื่อวิชา': document.getElementById('m_name').value,
-                                'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': locationVal,
-                                'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
-                                'ผู้บันทึก': currentUser
-                            };
-                            const currentRowId = (tempIdx === 0) ? rowId : null;
-                            
-                            try {
-                                await processSaveDataAsync(data, currentRowId);
-                                tempIdx++;
-                            } catch (err) {
-                                hasError = true;
-                            }
+                        const data = {
+                            'ห้องเรียน': room, 'แผนการเรียน': plan,
+                            'วัน': d, 'คาบที่': p,
+                            'รหัสวิชา': code, 'ชื่อวิชา': document.getElementById('m_name').value,
+                            'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': locationVal,
+                            'ประเภท': 'ปกติ', // <--- แก้ไขตรงนี้ให้บันทึกเป็นค่า 'ปกติ' เสมอ
+                            'ผู้บันทึก': currentUser
+                        };
+                        const currentRowId = (tempIdx === 0) ? rowId : null;
+                        
+                        try {
+                            await processSaveDataAsync(data, currentRowId);
+                            tempIdx++;
+                        } catch (err) {
+                            hasError = true;
                         }
                     }
                 })();
-            };
-
-            document.getElementById('schTeacherForm').onsubmit = async (e) => {
-                e.preventDefault();
-                refreshSchGrid();
             };
         }
 
