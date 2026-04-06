@@ -2646,54 +2646,57 @@
                     if (!code) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกรหัสวิชา', 'warning');
                     if (!name) return Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
 
-                    let currentCourseCount = 0;
-                    for (let i = 0; i < allDataToCheck.length; i++) {
-                        let s = allDataToCheck[i];
-                        if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
-                            currentCourseCount++;
+                    // ยกเว้นการตรวจสอบการชนกันหากเป็นการ "ล๊อควิชาเรียน"
+                    if (!isLockMode) {
+                        let currentCourseCount = 0;
+                        for (let i = 0; i < allDataToCheck.length; i++) {
+                            let s = allDataToCheck[i];
+                            if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
+                                currentCourseCount++;
+                            }
                         }
-                    }
 
-                    let courseInfo = window.courseLookup.find(c => String(c['รหัสวิชา'] || '').trim() === code);
-                    if (courseInfo) {
-                        let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
-                        let credit = parseFloat(creditStr);
-                        let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
-                        let requestedPeriods = dayChks.length * periodChks.length;
-                        
-                        if (maxPeriods > 0 && (currentCourseCount + requestedPeriods) > maxPeriods) {
-                            conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${requestedPeriods} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
+                        let courseInfo = window.courseLookup.find(c => String(c['รหัสวิชา'] || '').trim() === code);
+                        if (courseInfo) {
+                            let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
+                            let credit = parseFloat(creditStr);
+                            let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
+                            let requestedPeriods = dayChks.length * periodChks.length;
+                            
+                            if (maxPeriods > 0 && (currentCourseCount + requestedPeriods) > maxPeriods) {
+                                conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${requestedPeriods} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
+                            }
                         }
-                    }
 
-                    dayChks.forEach(d => {
-                        periodChks.forEach(p => {
-                            allDataToCheck.forEach(slot => {
-                                if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
-                                    let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
-                                    let sLocation = String(slot['สถานที่เรียน'] || '').trim();
-                                    let sRoom = String(slot['ห้องเรียน'] || '').trim();
+                        dayChks.forEach(d => {
+                            periodChks.forEach(p => {
+                                allDataToCheck.forEach(slot => {
+                                    if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
+                                        let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                                        let sLocation = String(slot['สถานที่เรียน'] || '').trim();
+                                        let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
-                                    if (teacher !== '' && sTeacher === teacher) {
-                                        let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
-                                        if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
-                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
-                                        } else {
-                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                        if (teacher !== '' && sTeacher === teacher) {
+                                            let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                            if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
+                                                conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                            } else {
+                                                conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                            }
+                                        }
+                                        
+                                        if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
+                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
+                                        }
+                                        
+                                        if (sRoom === room && slot['แผนการเรียน'] === plan) {
+                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
                                         }
                                     }
-                                    
-                                    if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
-                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
-                                    }
-                                    
-                                    if (sRoom === room && slot['แผนการเรียน'] === plan) {
-                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
-                                    }
-                                }
+                                });
                             });
                         });
-                    });
+                    }
 
                 } else { // type === 'teacher'
                     actVal = document.getElementById('t_sch_activity').value.trim();
@@ -2862,57 +2865,60 @@
                     if (!code) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกรหัสวิชา', 'warning');
                     if (!name) return Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
 
-                    let currentCourseCount = 0;
-                    for (let i = 0; i < window.scheduleBaseData.length; i++) {
-                        let s = window.scheduleBaseData[i];
-                        if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
-                        if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
-                            currentCourseCount++;
+                    // ยกเว้นการตรวจสอบการชนกันหากเป็นการ "ล๊อควิชาเรียน"
+                    if (!isLockMode) {
+                        let currentCourseCount = 0;
+                        for (let i = 0; i < window.scheduleBaseData.length; i++) {
+                            let s = window.scheduleBaseData[i];
+                            if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
+                            if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
+                                currentCourseCount++;
+                            }
                         }
-                    }
 
-                    let courseInfo = window.courseLookup.find(c => String(c['รหัสวิชา'] || '').trim() === code);
-                    if (courseInfo) {
-                        let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
-                        let credit = parseFloat(creditStr);
-                        let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
-                        let requestedPeriods = dayChks.length * periodChks.length;
-                        
-                        if (maxPeriods > 0 && (currentCourseCount + requestedPeriods) > maxPeriods) {
-                            conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${requestedPeriods} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
+                        let courseInfo = window.courseLookup.find(c => String(c['รหัสวิชา'] || '').trim() === code);
+                        if (courseInfo) {
+                            let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
+                            let credit = parseFloat(creditStr);
+                            let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
+                            let requestedPeriods = dayChks.length * periodChks.length;
+                            
+                            if (maxPeriods > 0 && (currentCourseCount + requestedPeriods) > maxPeriods) {
+                                conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${requestedPeriods} คาบ แต่จะเกินกำหนด (${maxPeriods} คาบ/สัปดาห์)`);
+                            }
                         }
-                    }
 
-                    dayChks.forEach(d => {
-                        periodChks.forEach(p => {
-                            window.scheduleBaseData.forEach(slot => {
-                                if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
+                        dayChks.forEach(d => {
+                            periodChks.forEach(p => {
+                                window.scheduleBaseData.forEach(slot => {
+                                    if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
 
-                                if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
-                                    let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
-                                    let sLocation = String(slot['สถานที่เรียน'] || '').trim();
-                                    let sRoom = String(slot['ห้องเรียน'] || '').trim();
+                                    if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
+                                        let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                                        let sLocation = String(slot['สถานที่เรียน'] || '').trim();
+                                        let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
-                                    if (teacher !== '' && sTeacher === teacher) {
-                                        let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
-                                        if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
-                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
-                                        } else {
-                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                        if (teacher !== '' && sTeacher === teacher) {
+                                            let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                            if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
+                                                conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                            } else {
+                                                conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                            }
+                                        }
+                                        
+                                        if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
+                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
+                                        }
+                                        
+                                        if (sRoom === room && slot['แผนการเรียน'] === plan) {
+                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
                                         }
                                     }
-                                    
-                                    if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
-                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
-                                    }
-                                    
-                                    if (sRoom === room && slot['แผนการเรียน'] === plan) {
-                                        conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
-                                    }
-                                }
+                                });
                             });
                         });
-                    });
+                    }
 
                     if (locationVal) {
                         let currentRooms = (settings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
