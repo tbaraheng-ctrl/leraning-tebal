@@ -4343,12 +4343,8 @@
             document.getElementById('modalSchForm').onsubmit = async (e) => {
                 e.preventDefault();
                 
-                const submitBtn = e.target.querySelector('button[type="submit"]');
-                if(submitBtn) submitBtn.disabled = true;
-                
                 const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
                 if (periodChks.length === 0) {
-                    if(submitBtn) submitBtn.disabled = false;
                     return Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
                 }
                 
@@ -4357,17 +4353,14 @@
                 
                 if (window.interactiveViewMode === 'teacher') {
                     if (!room) {
-                        if(submitBtn) submitBtn.disabled = false;
                         return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้องให้ถูกต้อง', 'warning');
                     }
                     if (!plan) {
-                        if(submitBtn) submitBtn.disabled = false;
                         return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแผนการเรียน', 'warning');
                     }
                 }
 
                 if(!document.getElementById('m_name').value) {
-                    if(submitBtn) submitBtn.disabled = false;
                     return Swal.fire('แจ้งเตือน', 'ไม่พบรหัสวิชานี้ในระบบ กรุณาตรวจสอบอีกครั้ง', 'warning');
                 }
 
@@ -4378,32 +4371,8 @@
                 const locationVal = document.getElementById('m_location').value.trim();
                 const code = document.getElementById('m_code').value.trim();
 
-                // --- เพิ่มระบบตรวจสอบข้อมูลล่าสุด (Concurrency Check) เพื่อป้องกันการบันทึกชนกัน ---
-                Swal.fire({
-                    title: 'กำลังตรวจสอบคิวว่าง...',
-                    text: 'เพื่อป้องกันการบันทึกข้อมูลชนกันกับผู้อื่น',
-                    allowOutsideClick: false,
-                    didOpen: () => { Swal.showLoading(); }
-                });
-
-                let latestData = [];
-                try {
-                    delete cachePromises['กำหนดตารางสอน'];
-                    let rawData = await getCachedData('กำหนดตารางสอน', true, true);
-                    latestData = rawData.map((d, index) => ({...d, originalIndex: index}));
-                    
-                    window.interactiveSchData.filter(d => d.isPending).forEach(pendingItem => {
-                        latestData.push(pendingItem);
-                    });
-                    
-                    window.interactiveSchData = latestData;
-                    window.refreshSchGrid();
-                } catch(err) {
-                    Swal.close();
-                    if(submitBtn) submitBtn.disabled = false;
-                    return Swal.fire('ข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่อตรวจสอบได้ กรุณาลองใหม่', 'error');
-                }
-
+                // --- ตรวจสอบข้อมูลซ้ำซ้อนทันที (ใช้ข้อมูลในหน้าจอเพื่อไม่ให้ต้องรอโหลด) ---
+                let latestData = window.interactiveSchData;
                 let conflictMsg = [];
                 let currentCourseCount = 0;
 
@@ -4454,10 +4423,7 @@
                     });
                 });
 
-                Swal.close(); 
-
                 if (conflictMsg.length > 0) {
-                    if(submitBtn) submitBtn.disabled = false;
                     Swal.fire({
                         title: 'พบข้อมูลชนกัน!',
                         html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2"><b>ระบบตรวจพบการซ้ำซ้อน:</b><br>' + conflictMsg.join('<br>') + '</div>',
@@ -4479,9 +4445,8 @@
                 }
 
                 window.closeSchModal(); 
-                if(submitBtn) submitBtn.disabled = false;
                 
-                // ถอด showLoading ออก รันแบบเบื้องหลัง (Background Task) สำหรับหน้าจัดตารางสอน
+                // รันแบบเบื้องหลัง (Background Task) โชว์สถานะหมุนเฉพาะในช่องตาราง
                 (async () => {
                     let tempIdx = 0;
                     let hasError = false;
