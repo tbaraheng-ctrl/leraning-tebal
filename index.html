@@ -3054,7 +3054,7 @@
                                 window.tempSchList.push({
                                     'ห้องเรียน': ar, 'แผนการเรียน': '-',
                                     'วัน': d, 'คาบที่': p,
-                                    'รหัสวิชา': 'กิจกรรม', 'ชื่อวิชา': actVal,
+                                    'รหัสวิชา': saveCode, 'ชื่อวิชา': saveName,
                                     'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': '-',
                                     'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
                                     'ผู้บันทึก': currentUser
@@ -3077,6 +3077,7 @@
                     if(document.getElementById('sch_code')) document.getElementById('sch_code').focus();
                 } else {
                     if(document.getElementById('t_sch_activity')) document.getElementById('t_sch_activity').value = '';
+                    if(document.getElementById('t_sch_guidance_code')) document.getElementById('t_sch_guidance_code').value = '';
                     document.querySelectorAll('.t-sch-period-chk').forEach(c => c.checked = false);
                     document.querySelectorAll('.t-sch-day-chk').forEach(c => c.checked = false);
                     document.querySelectorAll('.t-sch-grade-chk').forEach(c => c.checked = false);
@@ -3351,7 +3352,7 @@
                                     let dataObj = {
                                         'ห้องเรียน': ar, 'แผนการเรียน': '-',
                                         'วัน': d, 'คาบที่': p,
-                                        'รหัสวิชา': 'กิจกรรม', 'ชื่อวิชา': actVal,
+                                        'รหัสวิชา': saveCode, 'ชื่อวิชา': saveName,
                                         'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': '-',
                                         'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
                                         'ผู้บันทึก': currentUser
@@ -3466,7 +3467,11 @@
                     window.updateLockTeacherList();
                     document.getElementById('t_sch_teacher').value = teacherName;
 
-                    document.getElementById('t_sch_activity').value = data['ชื่อวิชา'] || '';
+                    if (data['รหัสวิชา'] !== 'กิจกรรม') {
+                        document.getElementById('t_sch_activity').value = `${data['รหัสวิชา']} - ${data['ชื่อวิชา']}`;
+                    } else {
+                        document.getElementById('t_sch_activity').value = data['ชื่อวิชา'] || '';
+                    }
                     
                     document.querySelectorAll('.t-sch-grade-chk, .t-sch-room-chk').forEach(c => c.checked = false);
                     if (data['ห้องเรียน'] && data['ห้องเรียน'] !== '-') {
@@ -3543,6 +3548,7 @@
                 document.getElementById('schTeacherForm').reset();
                 document.getElementById('sch_id').value = '';
                 document.getElementById('t_sch_id').value = '';
+                if(document.getElementById('t_sch_guidance_code')) document.getElementById('t_sch_guidance_code').value = '';
                 
                 const container = document.getElementById('sch_room_plan_container');
                 if(container) container.innerHTML = '';
@@ -4816,7 +4822,7 @@
             };
         }
 
-        // --- 6. ประมวลผลตารางสอน ---
+       // --- 6. ประมวลผลตารางสอน ---
         function renderProcess(container) {
             container.innerHTML = `
                 <div class="bg-white p-10 rounded-xl shadow-md text-center max-w-lg mx-auto mt-10">
@@ -5128,26 +5134,60 @@
                                 let slots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
                                 
                                 if(slots.length > 0) {
-                                    let cellContent = slots.map(slot => {
+                                    let displaySlots = slots;
+                                    if (type === 'teacher') {
+                                        let grouped = {};
+                                        slots.forEach(slot => {
+                                            let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
+                                            if (!grouped[key]) {
+                                                grouped[key] = { ...slot, allRooms: [slot['ห้องเรียน']] };
+                                            } else {
+                                                if (slot['ห้องเรียน'] !== '-' && !grouped[key].allRooms.includes(slot['ห้องเรียน'])) {
+                                                    grouped[key].allRooms.push(slot['ห้องเรียน']);
+                                                }
+                                            }
+                                        });
+                                        displaySlots = Object.values(grouped);
+                                    } else if (type === 'student') {
+                                        let grouped = {};
+                                        slots.forEach(slot => {
+                                            let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
+                                            if (!grouped[key]) {
+                                                grouped[key] = { ...slot, allTeachers: [slot['ชื่อครูผู้สอน']] };
+                                            } else {
+                                                if (!grouped[key].allTeachers.includes(slot['ชื่อครูผู้สอน'])) {
+                                                    grouped[key].allTeachers.push(slot['ชื่อครูผู้สอน']);
+                                                }
+                                            }
+                                        });
+                                        displaySlots = Object.values(grouped);
+                                    }
+
+                                    let cellContent = displaySlots.map(slot => {
                                         let innerHtml = '';
                                         if(settings.show_code) innerHtml += `<div class="font-bold text-xs">${slot['รหัสวิชา']}</div>`;
                                         if(settings.show_name) innerHtml += `<div class="text-[11px] text-navy leading-tight">${slot['ชื่อวิชา']}</div>`;
                                         
                                         if(settings.show_teacher && type === 'student') {
-                                            let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
-                                            let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                            let displayTeacher = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                            let teachersList = slot.allTeachers || [slot['ชื่อครูผู้สอน']];
+                                            let cleanNames = teachersList.map(tName => {
+                                                let cleanName = String(tName || '').replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
+                                                return cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                            }).filter(n => n);
+                                            let displayTeacher = cleanNames.join(', ');
                                             innerHtml += `<div class="text-[10px] text-blue-700 mt-1">${displayTeacher}</div>`;
                                         }
                                         
-                                        if(settings.show_room && type === 'teacher') innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${slot['ห้องเรียน']}</span></div>`;
+                                        if(settings.show_room && type === 'teacher') {
+                                            if (slot.allRooms && slot.allRooms.length > 0) {
+                                                let rText = slot.allRooms.includes('-') ? 'กิจกรรม' : slot.allRooms.join(', ');
+                                                innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${rText}</span></div>`;
+                                            } else {
+                                                innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${slot['ห้องเรียน']}</span></div>`;
+                                            }
+                                        }
                                         
                                         if(slot['สถานที่เรียน']) innerHtml += `<div class="text-[9px] text-gray-600 mt-0.5">${slot['สถานที่เรียน']}</div>`;
-                                        
-                                        // สำหรับตารางครู ถ้ามีซ้อนทับกันหลายห้องจะแสดงห้องกำกับ
-                                        if (type === 'teacher' && slots.length > 1) {
-                                             innerHtml += `<div class="text-[9px] text-purple-600 font-semibold mt-0.5">[${slot['ห้องเรียน']}]</div>`;
-                                        }
 
                                         return `<div class="border-b border-blue-200 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">${innerHtml}</div>`;
                                     }).join('');
@@ -5375,16 +5415,33 @@
                 callAPI('saveData', { sheetName: 'คำสั่งสอน', rowId: null, data: savePayload }, true);
                 getCachedData('คำสั่งสอน', true, true); // อัปเดตแคชเงียบๆ
 
-                // ดึงข้อมูลครูและผลการประมวลตารางสอน เพื่อนำมาสรุปภาระงาน
-                let [teachers, rawData, settingsData] = await Promise.all([
+                // ดึงข้อมูลครู ข้อมูลอัตรากำลังรายวิชา และข้อมูลกิจกรรมที่ถูกล๊อคไว้ เพื่อนำมาสรุปภาระงานให้ครบถ้วน
+                let [teachers, coursesData, settingsData, lockedData] = await Promise.all([
                     getCachedData('ข้อมูลครู'),
-                    getCachedData('ผลการประมวลตารางสอน'),
-                    getCachedData('การตั้งค่า')
+                    getCachedData('ข้อมูลรายวิชา'),
+                    getCachedData('การตั้งค่า'),
+                    getCachedData('ล๊อคตาราง')
                 ]);
 
                 let schoolSettings = settingsData.length > 0 ? JSON.parse(settingsData[0]['JSON_DATA'] || '{}') : {};
                 let schoolName = schoolSettings.school_name || 'โรงเรียนนราสิกขาลัย';
-                let processedData = rawData.length > 0 ? JSON.parse(rawData[0]['DATA_DUMP'] || '{"teacher":{}}') : {teacher:{}};
+                
+                let planMappings = {};
+                if (schoolSettings.learning_plans) {
+                    if (schoolSettings.learning_plans.includes('\n') || schoolSettings.learning_plans.includes(':')) {
+                        schoolSettings.learning_plans.split('\n').forEach(line => {
+                            let parts = line.split(':');
+                            if (parts.length > 0) {
+                                let pName = parts[0].trim();
+                                let pRooms = parts.length > 1 ? parts[1].split(',').map(r => r.trim()).filter(r => r) : [];
+                                if (pName) planMappings[pName] = pRooms;
+                            }
+                        });
+                    }
+                }
+                
+                // กรองรายวิชาเฉพาะภาคเรียนที่ตรงกับคำสั่ง
+                let activeCourses = coursesData.filter(c => String(c['ภาคเรียนที่']).trim() === String(termInput).trim());
                 
                 // โครงสร้าง HTML สำหรับเอกสารราชการส่วนหัว (หน้าแรก)
                 let orderHtml = `
@@ -5516,56 +5573,87 @@
                     let group = t['กลุ่มสาระการเรียนรู้'];
                     if (!departments[group]) departments[group] = [];
                     
-                    let schedule = processedData.teacher[name] || [];
+                    let teacherCourses = activeCourses.filter(c => String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === String(name).replace(/\s+/g, ' ').trim());
                     
                     let courseMap = {};
                     
-                    schedule.forEach(s => {
-                        let cCode = s['รหัสวิชา'];
-                        let room = s['ห้องเรียน'];
+                    teacherCourses.forEach(c => {
+                        let cCode = String(c['รหัสวิชา'] || '').trim();
+                        let roomsStr = c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '';
+                        let plansStr = c['แผนการเรียน'] || '';
                         
+                        let cRooms = roomsStr.split(',').map(r => r.trim()).filter(r => r);
+                        let cPlans = plansStr.split(',').map(p => p.trim()).filter(p => p);
+                        
+                        let numRooms = cRooms.length;
+                        
+                        // หากไม่ได้ระบุห้อง แต่ระบุแผนการเรียน ให้ประเมินจำนวนห้องจากแผนการเรียน
+                        if (numRooms === 0 && cPlans.length > 0) {
+                            let tempRooms = [];
+                            cPlans.forEach(p => {
+                                if (planMappings[p]) tempRooms.push(...planMappings[p]);
+                            });
+                            let uniqueTempRooms = [...new Set(tempRooms)];
+                            numRooms = uniqueTempRooms.length;
+                            if (numRooms > 0) cRooms = uniqueTempRooms;
+                        }
+                        
+                        if (numRooms === 0) numRooms = 1; // อย่างน้อย 1 กลุ่ม
+
                         if (!courseMap[cCode]) {
                             courseMap[cCode] = {
-                                name: s['ชื่อวิชา'],
+                                name: String(c['ชื่อวิชา'] || '').trim(),
                                 rooms: new Set(),
-                                uniquePeriods: new Set()
+                                hours: 0
                             };
                         }
                         
-                        if (room && room !== '-') {
-                            courseMap[cCode].rooms.add(room);
-                            // เก็บ คาบสอนแยกตามห้อง เพื่อให้ได้ชั่วโมงรวมที่ถูกต้องตามจำนวนห้อง
-                            courseMap[cCode].uniquePeriods.add(s['วัน'] + '_' + s['คาบที่'] + '_' + room);
-                        } else if (cCode === 'กิจกรรม') {
-                             // สำหรับกิจกรรมครู
-                            courseMap[cCode].uniquePeriods.add(s['วัน'] + '_' + s['คาบที่'] + '_activity');
+                        if (cRooms.length > 0) {
+                            cRooms.forEach(r => courseMap[cCode].rooms.add(r));
                         } else {
-                            courseMap[cCode].uniquePeriods.add(s['วัน'] + '_' + s['คาบที่'] + '_noroom');
+                            if (cPlans.length > 0) courseMap[cCode].rooms.add(cPlans.join(', '));
+                            else courseMap[cCode].rooms.add('-');
                         }
+                        
+                        let creditStr = String(c['หน่วยกิต'] || '').trim();
+                        let credit = parseFloat(creditStr);
+                        // 1.0 หน่วยกิต = 2 คาบ/สัปดาห์ * จำนวนห้อง
+                        let required = (!isNaN(credit) && credit > 0) ? (credit * 2 * numRooms) : 0; 
+                        
+                        courseMap[cCode].hours += required;
                     });
                     
                     // แปลงข้อมูลเป็น Array สำหรับวิชาทั้งหมดของครูท่านนี้
-                    let courses = Object.keys(courseMap).map(code => {
+                    let coursesArr = Object.keys(courseMap).map(code => {
                         let c = courseMap[code];
-                        let roomsArr = Array.from(c.rooms).sort();
+                        let roomsArr = Array.from(c.rooms).sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
+                        
                         // ดึงระดับชั้นจากคำนำหน้าของห้องเรียน (เช่น "ม.4/1" -> "ม.4")
-                        let grades = new Set(roomsArr.map(r => r.split('/')[0].trim()));
+                        let grades = new Set();
+                        roomsArr.forEach(r => {
+                            if (r.includes('/')) {
+                                grades.add(r.split('/')[0].trim());
+                            } else if (r.startsWith('ม.')) {
+                                grades.add(r);
+                            }
+                        });
+                        
                         return {
                             code: code,
                             name: c.name,
-                            grade: Array.from(grades).join(', ') || '-',
+                            grade: grades.size > 0 ? Array.from(grades).join(', ') : '-',
                             rooms: roomsArr.join(', ') || '-',
-                            hours: c.uniquePeriods.size // นับชั่วโมงตามจำนวนห้องที่สอนจริง
+                            hours: c.hours
                         };
                     });
                     
-                    let totalHours = courses.reduce((sum, c) => sum + c.hours, 0);
+                    let totalHours = coursesArr.reduce((sum, c) => sum + c.hours, 0);
                     
                     // แสดงเฉพาะครูที่มีชั่วโมงสอน หรือเป็นครูผู้สอนปกติ
                     if (totalHours > 0 || t['บทบาท'] === 'user') {
                         departments[group].push({
                             name: name,
-                            courses: courses,
+                            courses: coursesArr,
                             totalHours: totalHours
                         });
                     }
