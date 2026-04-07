@@ -2433,41 +2433,39 @@
                     roomCheckboxes.forEach(rChk => {
                         const roomName = `ม.${gChk.value}/${rChk.value}`;
 
-                        const existingRooms = Array.from(container.querySelectorAll('.rp-room')).map(input => input.value);
-                        if(!existingRooms.includes(roomName)) {
-                            let matchedPlan = '';
-                            for (const [pName, pRooms] of Object.entries(window.schPlanMappings)) {
-                                if (pRooms.includes(roomName)) {
-                                    matchedPlan = pName;
-                                    break;
-                                }
+                        // อนุญาตให้เพิ่มห้องซ้ำได้ เพื่อให้รองรับห้องเรียนที่มีหลายแผนการเรียน
+                        let matchedPlan = '';
+                        for (const [pName, pRooms] of Object.entries(window.schPlanMappings)) {
+                            if (pRooms.includes(roomName)) {
+                                matchedPlan = pName;
+                                break;
                             }
-
-                            let optionsHtml = '<option value="">-- เลือกแผน --</option>';
-                            learningPlans.forEach(p => {
-                                optionsHtml += `<option value="${p}" ${p === matchedPlan ? 'selected' : ''}>${p}</option>`;
-                            });
-
-                            const row = document.createElement('div');
-                            row.className = 'flex items-center gap-2 room-plan-pair bg-white p-2 border border-gray-200 rounded shadow-sm';
-                            row.innerHTML = `
-                                <div class="flex-1 flex items-center gap-2">
-                                    <span class="text-sm font-medium text-gray-600 w-12">ห้อง:</span>
-                                    <input type="text" class="rp-room border border-gray-300 rounded p-1.5 text-sm w-full bg-gray-50 text-navy font-semibold outline-none cursor-not-allowed" value="${roomName}" readonly>
-                                </div>
-                                <div class="flex-1 flex items-center gap-2">
-                                    <span class="text-sm font-medium text-gray-600 w-10">แผน:</span>
-                                    <select class="rp-plan border border-gray-300 rounded p-1.5 text-sm w-full focus:border-gold outline-none" onchange="window.updateMainFormDropdowns()">
-                                        ${optionsHtml}
-                                    </select>
-                                </div>
-                                <button type="button" onclick="this.closest('.room-plan-pair').remove(); window.updateMainFormDropdowns();" class="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded transition">
-                                    <i class="fas fa-times"></i>
-                                </button>
-                            `;
-                            container.appendChild(row);
-                            addedCount++;
                         }
+
+                        let optionsHtml = '<option value="">-- เลือกแผน --</option>';
+                        learningPlans.forEach(p => {
+                            optionsHtml += `<option value="${p}" ${p === matchedPlan ? 'selected' : ''}>${p}</option>`;
+                        });
+
+                        const row = document.createElement('div');
+                        row.className = 'flex items-center gap-2 room-plan-pair bg-white p-2 border border-gray-200 rounded shadow-sm';
+                        row.innerHTML = `
+                            <div class="flex-1 flex items-center gap-2">
+                                <span class="text-sm font-medium text-gray-600 w-12">ห้อง:</span>
+                                <input type="text" class="rp-room border border-gray-300 rounded p-1.5 text-sm w-full bg-gray-50 text-navy font-semibold outline-none cursor-not-allowed" value="${roomName}" readonly>
+                            </div>
+                            <div class="flex-1 flex items-center gap-2">
+                                <span class="text-sm font-medium text-gray-600 w-10">แผน:</span>
+                                <select class="rp-plan border border-gray-300 rounded p-1.5 text-sm w-full focus:border-gold outline-none" onchange="window.updateMainFormDropdowns()">
+                                    ${optionsHtml}
+                                </select>
+                            </div>
+                            <button type="button" onclick="this.closest('.room-plan-pair').remove(); window.updateMainFormDropdowns();" class="text-red-500 hover:text-red-700 p-1.5 hover:bg-red-50 rounded transition">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        `;
+                        container.appendChild(row);
+                        addedCount++;
                     });
                 });
 
@@ -4021,15 +4019,35 @@
                         if(slots.length > 0) {
                             let hasPending = slots.some(s => s.isPending);
 
+                            let displaySlots = slots;
+                            if (window.interactiveViewMode === 'teacher') {
+                                let grouped = {};
+                                slots.forEach(slot => {
+                                    let key = `${slot['รหัสวิชา']}_${slot['ชื่อวิชา']}`;
+                                    if (!grouped[key]) {
+                                        grouped[key] = { ...slot, allRooms: [slot['ห้องเรียน']] };
+                                    } else {
+                                        if (slot['ห้องเรียน'] !== '-' && !grouped[key].allRooms.includes(slot['ห้องเรียน'])) {
+                                            grouped[key].allRooms.push(slot['ห้องเรียน']);
+                                        }
+                                    }
+                                });
+                                displaySlots = Object.values(grouped);
+                            }
+
                             if (hasPending) {
-                                let firstSlot = slots[0]; 
+                                let firstSlot = displaySlots[0]; 
                                 let displaySub = '';
                                 if (window.interactiveViewMode === 'student') {
                                     let teacherName = String(firstSlot['ชื่อครูผู้สอน'] || '');
                                     let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
                                     displaySub = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
                                 } else {
-                                    displaySub = firstSlot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + firstSlot['ห้องเรียน'];
+                                    if (firstSlot.allRooms && firstSlot.allRooms.length > 0) {
+                                        displaySub = firstSlot.allRooms.includes('-') ? 'กิจกรรม' : 'ชั้น ' + firstSlot.allRooms.join(', ');
+                                    } else {
+                                        displaySub = firstSlot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + firstSlot['ห้องเรียน'];
+                                    }
                                 }
 
                                 tds += `
@@ -4038,20 +4056,24 @@
                                         <div class="text-[11px] text-gray-700 truncate w-full overflow-hidden">${firstSlot['ชื่อวิชา']}</div>
                                         <div class="text-[11px] font-medium text-blue-700 mt-1">${displaySub}</div>
                                         ${firstSlot['สถานที่เรียน'] ? `<div class="text-[10px] text-gray-600 mt-0.5">${firstSlot['สถานที่เรียน']}</div>` : ''}
-                                        ${slots.length > 1 ? `<div class="text-[10px] text-purple-600 mt-1 font-bold">+ ซ้อนอีก ${slots.length - 1} รายการ</div>` : ''}
+                                        ${displaySlots.length > 1 ? `<div class="text-[10px] text-purple-600 mt-1 font-bold">+ ซ้อนอีก ${displaySlots.length - 1} รายการ</div>` : ''}
                                         <div class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-60 transition">
                                             <i class="fas fa-spinner fa-spin text-blue-600 text-2xl drop-shadow-sm"></i>
                                         </div>
                                     </td>`;
                             } else {
-                                let cellContent = slots.map(slot => {
+                                let cellContent = displaySlots.map(slot => {
                                     let displaySub = '';
                                     if (window.interactiveViewMode === 'student') {
                                         let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
                                         let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
                                         displaySub = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
                                     } else {
-                                        displaySub = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + slot['ห้องเรียน'];
+                                        if (slot.allRooms && slot.allRooms.length > 0) {
+                                            displaySub = slot.allRooms.includes('-') ? 'กิจกรรม' : 'ชั้น ' + slot.allRooms.join(', ');
+                                        } else {
+                                            displaySub = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + slot['ห้องเรียน'];
+                                        }
                                     }
 
                                     let creator = slot['ผู้บันทึก'] || '';
@@ -5174,18 +5196,36 @@
                     let trs = '';
                     days.forEach(day => {
                         let tds = '';
-                        for(let i=1; i<=periods; i++) {
+                        let i = 1;
+                        while(i <= periods) {
                             if (i === breakPeriod) {
                                 tds += `<td class="border border-navy p-2 text-center align-middle bg-gray-100 text-gray-500 text-xs w-16">
                                             <i class="fas fa-utensils mb-1"></i><br>พัก
                                         </td>`;
-                            } else {
-                                // Find matching slots
-                                let slots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
+                                i++;
+                                continue;
+                            }
+
+                            // Find matching slots
+                            let slots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
+                            let colspan = 1;
+
+                            if (slots.length > 0) {
+                                let nextI = i + 1;
+                                while (nextI <= periods && nextI !== breakPeriod) {
+                                    let nextSlots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === nextI);
+                                    if (window.areSlotsEqual(slots, nextSlots)) {
+                                        colspan++;
+                                        nextI++;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
                                 
-                                if(slots.length > 0) {
-                                    let displaySlots = slots;
-                                    if (type === 'teacher') {
+                            if(slots.length > 0) {
+                                let displaySlots = slots;
+                                if (type === 'teacher') {
                                         let grouped = {};
                                         slots.forEach(slot => {
                                             let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
@@ -5242,11 +5282,12 @@
                                         return `<div class="border-b border-blue-200 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">${innerHtml}</div>`;
                                     }).join('');
                                     
-                                    tds += `<td class="border border-navy p-1 text-center align-top bg-blue-50">${cellContent}</td>`;
+                                    tds += `<td colspan="${colspan}" class="border border-navy p-1 text-center align-top bg-blue-50">${cellContent}</td>`;
                                 } else {
-                                    tds += `<td class="border border-navy p-2 text-center text-gray-300 align-middle">-</td>`;
+                                    tds += `<td colspan="${colspan}" class="border border-navy p-2 text-center text-gray-300 align-middle">-</td>`;
                                 }
-                            }
+                            
+                            i += colspan;
                         }
                         trs += `<tr><td class="border border-navy p-2 font-bold text-center bg-navy text-white w-20 align-middle">${day}</td>${tds}</tr>`;
                     });
