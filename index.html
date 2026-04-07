@@ -3132,14 +3132,30 @@
                 window.closeSchBaseModal(); 
 
                 (async () => {
-                    let hasError = false;
-                    for (const data of window.tempSchList) {
-                        if (hasError) break; 
-                        try {
-                            await processSaveDataAsync(data, null);
-                        } catch (err) {
-                            hasError = true;
+                    window.pendingSchBaseSync++;
+                    window.updateSchBaseSyncStatus();
+                    
+                    try {
+                        if (isLockMode) {
+                            // บันทึกลง 2 ชีทพร้อมกันแบบกลุ่ม (รวดเดียว)
+                            await Promise.all([
+                                callAPI('saveBatchData', { sheetName: sheetName, dataArray: window.tempSchList }, true),
+                                callAPI('saveBatchData', { sheetName: 'กำหนดตารางสอน', dataArray: window.tempSchList }, true)
+                            ]);
+                        } else {
+                            await callAPI('saveBatchData', { sheetName: sheetName, dataArray: window.tempSchList }, true);
                         }
+
+                        window.pendingSchBaseSync--;
+                        if(isLockMode) getCachedData('กำหนดตารางสอน', true, true);
+                        let newData = await getCachedData(sheetName, true, true);
+                        window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index}));
+                        if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
+                        window.updateSchBaseSyncStatus();
+                    } catch (err) {
+                        window.pendingSchBaseSync--;
+                        window.updateSchBaseSyncStatus();
+                        Swal.fire('ข้อผิดพลาด', 'บันทึกข้อมูลแบบกลุ่มล้มเหลว (คุณอัปเดตไฟล์ Code.gs หรือยัง?)', 'error');
                     }
                 })();
                 window.tempSchList = []; 
@@ -4822,7 +4838,7 @@
             };
         }
 
-       // --- 6. ประมวลผลตารางสอน ---
+        /// --- 6. ประมวลผลตารางสอน ---
         function renderProcess(container) {
             container.innerHTML = `
                 <div class="bg-white p-10 rounded-xl shadow-md text-center max-w-lg mx-auto mt-10">
@@ -4836,21 +4852,38 @@
             `;
 
             window.executeProcess = async () => {
-                let res = await callAPI('processTimetable');
-                if(res) {
-                    await getCachedData('ผลการประมวลตารางสอน', true); 
-                    Swal.fire('สำเร็จ', 'ประมวลผลตารางสอนเสร็จสมบูรณ์ สามารถไปดูได้ที่หน้าดาวน์โหลด', 'success');
+                try {
+                    showLoading(true, 'กำลังเตรียมข้อมูลและจัดกลุ่มตารางสอน...');
+                    
+                    // ดึงตารางล่าสุดมาอัปเดตแคช (ประมวลผลข้อมูลที่ฝั่งหน้าเว็บแทน เพื่อลดภาระเซิร์ฟเวอร์และแก้ปัญหาข้อมูลเกิน 50k ตัวอักษร)
+                    await getCachedData('กำหนดตารางสอน', true, true); 
+                    
+                    // หน่วงเวลาเล็กน้อยเพื่อให้ผู้ใช้ทราบว่าระบบทำงานเสร็จแล้ว
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                    
+                    showLoading(false);
+                    Swal.fire('สำเร็จ', 'ประมวลผลและจัดเตรียมตารางสอนเสร็จสมบูรณ์ สามารถไปดูได้ที่หน้าดาวน์โหลด', 'success');
+                } catch (error) {
+                    showLoading(false);
+                    console.error('Process Timetable Error:', error);
+                    let errMsg = error.message || 'การเชื่อมต่อขัดข้อง';
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'เกิดข้อผิดพลาด',
+                        text: 'ไม่สามารถประมวลผลตารางสอนได้: ' + errMsg
+                    });
                 }
             }
         }
 
+
          // --- 7. ดาวน์โหลดตารางสอน ---
         async function renderDownload(container) {
-            // โหลด 3 ชีทพร้อมกันแบบขนาน (Parallel Loading) ช่วยลดเวลาได้ 3 เท่า
+            // โหลดข้อมูลดิบจาก 'กำหนดตารางสอน' แล้วนำมาประมวลผลที่หน้าเว็บโดยตรง
             let [settingsArr, teachers, rawData] = await Promise.all([
                 getCachedData('การตั้งค่า'),
                 getCachedData('ข้อมูลครู'),
-                getCachedData('ผลการประมวลตารางสอน')
+                getCachedData('กำหนดตารางสอน')
             ]);
             
             let settings = settingsArr.length > 0 ? JSON.parse(settingsArr[0]['JSON_DATA'] || '{}') : {periods: 8, term: '1', year: '2568'};
@@ -4858,8 +4891,25 @@
             let currentYear = settings.year || '2568';
             let schoolName = settings.school_name || 'โรงเรียนนราสิกขาลัย';
             let rooms = (settings.rooms || '').split(',').map(r => r.trim()).filter(r => r);
-            let processedData = rawData.length > 0 ? JSON.parse(rawData[0]['DATA_DUMP'] || '{"student":{}, "teacher":{}}') : {student:{}, teacher:{}};
             let plans = learningPlans;
+
+            // ประมวลผลและจัดกลุ่มข้อมูลตารางสอน (Client-side Processing)
+            let processedData = { student: {}, teacher: {} };
+            if (rawData && rawData.length > 0) {
+                rawData.forEach(slot => {
+                    let room = String(slot['ห้องเรียน'] || '').trim();
+                    let teacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                    
+                    if (room !== '' && room !== '-') {
+                        if (!processedData.student[room]) processedData.student[room] = [];
+                        processedData.student[room].push(slot);
+                    }
+                    if (teacher !== '' && teacher !== '-') {
+                        if (!processedData.teacher[teacher]) processedData.teacher[teacher] = [];
+                        processedData.teacher[teacher].push(slot);
+                    }
+                });
+            }
 
             container.innerHTML = `
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -4967,7 +5017,7 @@
             window.forceRefreshDownload = async () => {
                 showLoading(true);
                 await Promise.all([
-                    getCachedData('ผลการประมวลตารางสอน', true),
+                    getCachedData('กำหนดตารางสอน', true),
                     getCachedData('ข้อมูลครู', true)
                 ]);
                 showLoading(false);
