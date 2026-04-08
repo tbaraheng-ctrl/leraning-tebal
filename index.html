@@ -187,8 +187,38 @@
         let cachePromises = {}; // เปลี่ยนจาก cachedData เป็น cachePromises เพื่อกันการโหลดซ้ำซ้อน
         window.appSettings = {}; // เพิ่มตัวแปรสำหรับเก็บการตั้งค่าแบบ Global ให้อ่านได้ทันทีโดยไม่ต้องรอโหลด
 
-        const subjectGroups = ['วิทยาศาสตร์และเทคโนโลยี', 'คณิตศาสตร์', 'ภาษาไทย', 'ภาษาต่างประเทศ', 'สังคมศึกษา ศาสนาและวัฒนธรรม', 'การงานอาชีพ', 'สุขศึกษาและพลศึกษา', 'ศิลปะ'];
+        // ปรับให้สามารถเปลี่ยนแปลงค่าได้แบบอัตโนมัติจากฐานข้อมูลครู
+        let defaultSubjectGroups = ['วิทยาศาสตร์และเทคโนโลยี', 'คณิตศาสตร์', 'ภาษาไทย', 'ภาษาต่างประเทศ', 'สังคมศึกษา ศาสนาและวัฒนธรรม', 'การงานอาชีพ', 'สุขศึกษาและพลศึกษา', 'ศิลปะ'];
+        let subjectGroups = [...defaultSubjectGroups];
         let learningPlans = ['ทั่วไป', 'วิทย์-คณิต', 'SMTE', '(วิทย์-คณิต) พลังสิบ', '(วิทย์-คณิต)เตรียมสี่เหล่าทัพ', 'IEP', 'ภาษาจีน', 'อาชีพ', 'ศิลป์-กีฬา']; 
+
+        // กำหนดลำดับกลุ่มสาระที่ต้องการ
+        const targetGroupOrder = [
+            'ผู้อำนวยการ',
+            'รองผู้อำนวยการ',
+            'วิทยาศาสตร์และเทคโนโลยี',
+            'คณิตศาสตร์',
+            'ภาษาไทย',
+            'ภาษาต่างประเทศ',
+            'สังคมศึกษา ศาสนาและวัฒนธรรม',
+            'การงานอาชีพ',
+            'สุขศึกษาและพลศึกษา',
+            'ศิลปะ',
+            'แนะแนว'
+        ];
+
+        // ฟังก์ชันเรียงลำดับกลุ่มสาระ
+        const sortSubjectGroups = (groups) => {
+            return groups.sort((a, b) => {
+                let idxA = targetGroupOrder.indexOf(a);
+                let idxB = targetGroupOrder.indexOf(b);
+                // ถ้าทั้งคู่ไม่มีในลิสต์ ให้เรียงตามตัวอักษรท้ายสุด
+                if (idxA === -1 && idxB === -1) return a.localeCompare(b, 'th');
+                if (idxA === -1) return 1;
+                if (idxB === -1) return -1;
+                return idxA - idxB;
+            });
+        };
 
         // Global variables for location picker
         window.currentLocTarget = '';
@@ -359,6 +389,15 @@
         function getCachedData(sheetName, forceRefresh = false, isBackground = false) {
             if (forceRefresh || !cachePromises[sheetName]) {
                 cachePromises[sheetName] = callAPI('getData', { sheetName: sheetName }, isBackground).then(data => {
+                    // อัปเดตกลุ่มสาระการเรียนรู้จากข้อมูลครูโดยอัตโนมัติ
+                    if (sheetName === 'ข้อมูลครู' && data) {
+                        let dbGroups = [...new Set(data.map(t => String(t['กลุ่มสาระการเรียนรู้'] || '').trim()).filter(g => g))];
+                        if (dbGroups.length > 0) {
+                            subjectGroups = sortSubjectGroups(dbGroups);
+                        } else {
+                            subjectGroups = sortSubjectGroups([...defaultSubjectGroups]);
+                        }
+                    }
                     return data || [];
                 }).catch(e => {
                     delete cachePromises[sheetName]; 
@@ -673,6 +712,10 @@
             let teachers = await getCachedData('ข้อมูลครู');
             
             let groupOptions = subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('');
+            
+            // รวมกลุ่มสาระพื้นฐานและที่มีในระบบ เพื่อใช้แสดงผลเป็นตัวเลือกให้พิมพ์ง่ายๆ
+            let mergedGroupsForInput = sortSubjectGroups([...new Set([...defaultSubjectGroups, ...subjectGroups])]);
+            let datalistHtml = mergedGroupsForInput.map(g => `<option value="${g}">`).join('');
 
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative">
@@ -706,7 +749,11 @@
                         <form id="teacherForm" class="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4" onsubmit="event.preventDefault(); window.submitTeacher();">
                             <input type="hidden" id="t_id">
                             <div class="sm:col-span-2"><label class="block text-sm font-medium mb-1">ชื่อ-สกุล</label><input type="text" id="t_name" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
-                            <div><label class="block text-sm font-medium mb-1">กลุ่มสาระ</label><select id="t_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${groupOptions}</select></div>
+                            <div>
+                                <label class="block text-sm font-medium mb-1">กลุ่มสาระ</label>
+                                <input type="text" id="t_group" list="dl_t_group" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์กลุ่มสาระ...">
+                                <datalist id="dl_t_group">${datalistHtml}</datalist>
+                            </div>
                             <div>
                                 <label class="block text-sm font-medium mb-1">บทบาท</label>
                                 <select id="t_role" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
@@ -2027,6 +2074,9 @@
             let permArr = await getCachedData('กำหนดสิทธิ');
             let allowedGroups = permArr.length > 0 ? JSON.parse(permArr[0]['JSON_DATA'] || '[]') : [];
 
+            // เรียกข้อมูลครูเพื่ออัปเดตรายชื่อกลุ่มสาระให้เป็นปัจจุบันก่อนสร้างฟอร์ม
+            await getCachedData('ข้อมูลครู');
+
             let checkboxesHtml = subjectGroups.map((g, idx) => `
                 <label class="flex items-center space-x-3 p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 transition shadow-sm">
                     <input type="checkbox" value="${g}" class="perm-chk w-5 h-5 text-navy border-gray-300 rounded focus:ring-navy" ${allowedGroups.includes(g) ? 'checked' : ''}>
@@ -2173,9 +2223,18 @@
                 }
             };
 
+            // กรองวิชาแนะแนวจากฐานข้อมูลรายวิชา
+            let guidanceSet = new Set();
+            courses.forEach(c => {
+                if (String(c['ชื่อวิชา'] || '').includes('แนะแนว')) {
+                    guidanceSet.add(`${c['รหัสวิชา']} - ${c['ชื่อวิชา']}`);
+                }
+            });
+
             let defaultActivities = ['ประชุมวิชาการ', 'ประชุมฝ่ายบุคคล', 'ประชุมฝ่ายปกครอง', 'PLC กลุ่มสาระ', 'ประชุมฝ่ายบริหาร'];
             let savedActivities = (settings.teacher_activities || '').split(',').map(a => a.trim()).filter(a => a);
-            window.allActivities = [...new Set([...defaultActivities, ...savedActivities])];
+            // รวม activity ทั้งหมดเพื่อสร้างเป็นตัวเลือก
+            window.allActivities = [...new Set([...defaultActivities, ...savedActivities, ...guidanceSet])];
             let activityOptionsHtml = window.allActivities.map(a => `<option value="${a}">`).join('');
             let teacherOptsHtml = teachersArr.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
 
@@ -3057,6 +3116,15 @@
                     return; 
                 }
 
+                // แยก รหัส และ ชื่อวิชา เพื่อบันทึกลงฐานข้อมูลให้ถูกต้อง
+                let saveCode = 'กิจกรรม';
+                let saveName = actVal;
+                if (type === 'teacher' && actVal && actVal.includes(' - ')) {
+                    let parts = actVal.split(' - ');
+                    saveCode = parts[0].trim();
+                    saveName = parts.slice(1).join(' - ').trim();
+                }
+
                 // Add to Temp List
                 dayChks.forEach(d => {
                     periodChks.forEach(p => {
@@ -3358,6 +3426,15 @@
 
                 window.closeSchBaseModal(); 
                 
+                // แยก รหัส และ ชื่อวิชา เพื่อบันทึกลงฐานข้อมูลให้ถูกต้อง
+                let saveCode = 'กิจกรรม';
+                let saveName = actVal;
+                if (type === 'teacher' && actVal && actVal.includes(' - ')) {
+                    let parts = actVal.split(' - ');
+                    saveCode = parts[0].trim();
+                    saveName = parts.slice(1).join(' - ').trim();
+                }
+
                 (async () => {
                     let tempIdx = 0;
                     let hasError = false;
