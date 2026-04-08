@@ -180,7 +180,7 @@
         // CONFIGURATION
         // ==========================================
         // นำ URL ของ Web App ที่ได้จาก Google Apps Script มาใส่ที่นี่
-        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxpFVCZiJ-3ToorA9gAJ_2xuZAP6vAMe1YONk6FoQMdNfvgel-nTGNbuDLz_s9dKR3mRg/exec';
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyTIPBRQax8izL4KQi075WKyDsFNYEH3HOm1nqiYUw3q6lTKoSS_DfuoCUDRfnXV_Gc/exec';
         
         let currentUser = null;
         let currentRole = null;
@@ -334,11 +334,6 @@
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: formData.toString()
                 });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
                 const result = await response.json();
                 if (!isBackground) showLoading(false);
                 
@@ -347,13 +342,16 @@
             } catch (error) {
                 if (!isBackground) showLoading(false);
                 console.error('API Error:', error.message);
-                if (error.message.includes('Failed to fetch') && !isBackground) {
+                
+                // ดักจับ Error กรณี Script ของ Google ไม่ได้ผูกกับ Spreadsheet
+                if (error.message && error.message.includes("reading 'getSheetByName'")) {
                     Swal.fire({
                         icon: 'error',
-                        title: 'ข้อผิดพลาดเครือข่าย',
-                        text: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบว่า SCRIPT_URL ถูกต้อง และ Web App บน Google Apps Script เปิดสิทธิ์เป็น "ทุกคน (Anyone)" แล้ว'
+                        title: 'ตั้งค่าระบบหลังบ้านไม่ถูกต้อง',
+                        html: '<div class="text-left text-sm text-gray-700">ระบบไม่สามารถเข้าถึงฐานข้อมูล Google Sheets ได้<br><br><b>วิธีแก้ไขที่ Google Apps Script:</b><br><br>1. หากเป็น Script แบบแยก ให้คัดลอก ID ของ Google Sheets ไปใส่ในตัวแปร <code>SPREADSHEET_ID</code> ที่บรรทัดแรกๆ ของไฟล์ Code.gs<br><br>2. <b>หรือวิธีที่แนะนำ:</b> ให้สร้าง Script ผ่านเมนู <i>ส่วนขยาย > Apps Script</i> จากหน้า Google Sheets โดยตรง</div>'
                     });
                 }
+                
                 throw error; 
             }
         }
@@ -819,19 +817,28 @@
                 if(await Swal.fire({title: 'ยืนยันการลบ?', text: "คุณไม่สามารถกู้คืนได้!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
                     try {
                         showLoading(true);
-                        let res = await callAPI('deleteData', { sheetName: sheetName, rowIndex: parseInt(rowIndex) });
+                        
+                        let itemToDelete = window.teacherDataList[parseInt(rowIndex)];
+                        if(!itemToDelete) throw new Error('ไม่พบข้อมูลที่จะลบในหน้าจอ');
+
+                        // คลีนข้อมูลก่อนส่ง เพื่อให้ตรงกับหัวตารางใน Sheet 100%
+                        let cleanData = { ...itemToDelete };
+                        delete cleanData.originalIndex;
+                        delete cleanData.isPending;
+
+                        // ส่ง API สั่งลบ โดยส่งแค่ sheetName และ rowData
+                        let res = await callAPI('deleteData', { sheetName: sheetName, rowData: cleanData });
+                        
                         if(res) {
                             let newData = await getCachedData(sheetName, true); 
+                            window.teacherDataList = newData;
+                            if(window.filterTeacherTable) window.filterTeacherTable();
                             showLoading(false);
                             Swal.fire('ลบแล้ว!', '', 'success');
-                            
-                            if(sheetName === 'ข้อมูลครู' && window.teacherDataList) {
-                                window.teacherDataList = newData;
-                                if(window.filterTeacherTable) window.filterTeacherTable();
-                            }
                         }
                     } catch(e) {
                         showLoading(false);
+                        Swal.fire('ข้อผิดพลาด', e.message || 'การลบข้อมูลล้มเหลว', 'error');
                     }
                 }
             };
@@ -1256,6 +1263,11 @@
 
             window.deleteCourseRow = async (rowIndexStr) => {
                 if(await Swal.fire({title: 'ยืนยันการลบ?', text: "คุณไม่สามารถกู้คืนได้!", icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
+                    
+                    let itemToDelete = window.courseDataList.find(item => String(item.originalIndex) === String(rowIndexStr));
+                    if(!itemToDelete) return Swal.fire('ข้อผิดพลาด', 'ไม่พบข้อมูลที่จะลบ', 'error');
+
+                    // ซ่อนจากหน้าจอทันทีเพื่อความรวดเร็ว
                     window.courseDataList = window.courseDataList.filter(item => String(item.originalIndex) !== String(rowIndexStr));
                     window.filterCourseTable();
 
@@ -1264,8 +1276,13 @@
                     window.pendingCourseSync++;
                     window.updateCourseSyncStatus();
 
+                    // คลีนข้อมูลก่อนส่ง
+                    let cleanData = { ...itemToDelete };
+                    delete cleanData.originalIndex;
+                    delete cleanData.isPending;
+
                     try {
-                        let res = await callAPI('deleteData', { sheetName: 'ข้อมูลรายวิชา', rowIndex: parseInt(rowIndexStr) }, true);
+                        let res = await callAPI('deleteData', { sheetName: 'ข้อมูลรายวิชา', rowData: cleanData }, true);
                         window.pendingCourseSync--;
                         if(window.pendingCourseSync === 0) {
                             let newData = await getCachedData('ข้อมูลรายวิชา', true, true);
@@ -1273,11 +1290,12 @@
                             window.filterCourseTable();
                         }
                         window.updateCourseSyncStatus();
+                        Swal.fire({icon: 'success', title: 'ลบสำเร็จ', text: 'ลบข้อมูลรายวิชาเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false});
                     } catch (err) {
                         window.pendingCourseSync--;
                         window.updateCourseSyncStatus();
-                        const Toast = Swal.mixin({ toast: true, position: 'top-end', showConfirmButton: false, timer: 3000 });
-                        Toast.fire({ icon: 'error', title: 'ลบข้อมูลล้มเหลว' });
+                        Swal.fire('ข้อผิดพลาด', err.message || 'ลบข้อมูลล้มเหลว', 'error');
+                        window.refreshCourseTable();
                     }
                 }
             };
@@ -2165,15 +2183,8 @@
             window.pendingSchBaseSync = 0;
             window.tempSchList = []; // ตะกร้าเก็บข้อมูลชั่วคราวแบบ Batch Add
 
-            window.autoSyncInterval = setInterval(() => {
-                const activeEl = document.activeElement;
-                const isTypingOrSelecting = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
-                const schBaseModalEl = document.getElementById('schBaseModal');
-
-                if (window.pendingSchBaseSync === 0 && schBaseModalEl && schBaseModalEl.classList.contains('hidden') && !isTypingOrSelecting) {
-                    window.refreshSchBaseTable(true); 
-                }
-            }, 5000);
+            // ยกเลิกการรีเฟรชอัตโนมัติในหน้านี้ตามคำขอ ให้ใช้ปุ่มรีเฟรชเท่านั้น
+            // (ฟังก์ชัน loadPage ได้ทำการเคลียร์ interval เดิมทิ้งไว้ให้แล้ว)
 
             let tabHtml = '';
             if (isLockMode) {
@@ -2831,39 +2842,32 @@
                 window.updateSchBaseSyncStatus();
 
                 try {
-                    let p1 = callAPI('saveData', { sheetName: sheetName, rowId: (rowId !== null && !String(rowId).startsWith('temp_')) ? parseInt(rowId) : null, data: data }, true);
-                    let p2 = Promise.resolve();
+                    // [แก้ไข] เปลี่ยนจากขนานเป็นทำทีละขั้นตอน (Sequential)
+                    await callAPI('saveData', { sheetName: sheetName, rowId: (rowId !== null && !String(rowId).startsWith('temp_')) ? parseInt(rowId) : null, data: data }, true);
 
                     if (isLockMode) {
                         if (rowId === null) {
-                            // กรณีเพิ่มใหม่ บันทึกลงทั้งสองชีท
-                            p2 = callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data }, true);
+                            await callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data }, true);
                         } else if (oldItem) {
-                            // กรณีแก้ไข ค้นหา rowId ของชีทกำหนดตารางสอนจากข้อมูลเก่า
-                            let otherSheetData = await getCachedData('กำหนดตารางสอน');
+                            let otherSheetData = await getCachedData('กำหนดตารางสอน', true, true);
                             let otherRowIndex = otherSheetData.findIndex(item => 
-                                !item._isUpdating && // <-- เพิ่มการเช็คเพื่อไม่ให้อัปเดตข้อมูลแถวเดิมซ้ำ
-                                String(item['วัน']).trim() === String(oldItem['วัน']).trim() &&
-                                String(item['คาบที่']).trim() === String(oldItem['คาบที่']).trim() &&
-                                String(item['ห้องเรียน']).trim() === String(oldItem['ห้องเรียน']).trim() &&
-                                String(item['รหัสวิชา']).trim() === String(oldItem['รหัสวิชา']).trim()
+                                String(item['วัน']||'').trim() === String(oldItem['วัน']||'').trim() &&
+                                String(item['คาบที่']||'').trim() === String(oldItem['คาบที่']||'').trim() &&
+                                String(item['ห้องเรียน']||'').trim() === String(oldItem['ห้องเรียน']||'').trim() &&
+                                String(item['รหัสวิชา']||'').trim() === String(oldItem['รหัสวิชา']||'').trim()
                             );
                             if (otherRowIndex !== -1) {
-                                otherSheetData[otherRowIndex]._isUpdating = true; // <-- มาร์คว่าใช้งานแถวนี้แล้ว
-                                p2 = callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: otherRowIndex, data: data }, true);
+                                await callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: otherRowIndex, data: data }, true);
                             } else {
-                                // ถ้าหาไม่เจอให้เพิ่มเป็นรายการใหม่ในชีทกำหนดตารางสอนเลย เพื่อป้องกันข้อมูลหลุด
-                                p2 = callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data }, true);
+                                await callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data }, true);
                             }
                         }
                     }
 
-                    // ส่งคำสั่ง 2 ชีทแบบขนาน (Parallel) เพื่อลดเวลาประมวลผลให้เร็วขึ้น
-                    await Promise.all([p1, p2]);
-
                     window.pendingSchBaseSync--;
                     if(window.pendingSchBaseSync === 0) {
-                        if(isLockMode) getCachedData('กำหนดตารางสอน', true, true);
+                        await new Promise(resolve => setTimeout(resolve, 1500)); // หน่วงเวลาให้ Google บันทึกเสร็จ
+                        if(isLockMode) await getCachedData('กำหนดตารางสอน', true, true);
                         let newData = await getCachedData(sheetName, true, true);
                         window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index}));
                         if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
@@ -3155,17 +3159,16 @@
                     
                     try {
                         if (isLockMode) {
-                            // บันทึกลง 2 ชีทพร้อมกันแบบกลุ่ม (รวดเดียว)
-                            await Promise.all([
-                                callAPI('saveBatchData', { sheetName: sheetName, dataArray: window.tempSchList }, true),
-                                callAPI('saveBatchData', { sheetName: 'กำหนดตารางสอน', dataArray: window.tempSchList }, true)
-                            ]);
+                            // [แก้ไข] บันทึกลง 2 ชีทแบบเรียงลำดับ (Sequential)
+                            await callAPI('saveBatchData', { sheetName: sheetName, dataArray: window.tempSchList }, true);
+                            await callAPI('saveBatchData', { sheetName: 'กำหนดตารางสอน', dataArray: window.tempSchList }, true);
                         } else {
                             await callAPI('saveBatchData', { sheetName: sheetName, dataArray: window.tempSchList }, true);
                         }
 
                         window.pendingSchBaseSync--;
-                        if(isLockMode) getCachedData('กำหนดตารางสอน', true, true);
+                        await new Promise(resolve => setTimeout(resolve, 1500)); // หน่วงเวลาให้ Google บันทึกเสร็จ
+                        if(isLockMode) await getCachedData('กำหนดตารางสอน', true, true);
                         let newData = await getCachedData(sheetName, true, true);
                         window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index}));
                         if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
@@ -3173,7 +3176,7 @@
                     } catch (err) {
                         window.pendingSchBaseSync--;
                         window.updateSchBaseSyncStatus();
-                        Swal.fire('ข้อผิดพลาด', 'บันทึกข้อมูลแบบกลุ่มล้มเหลว (คุณอัปเดตไฟล์ Code.gs หรือยัง?)', 'error');
+                        Swal.fire('ข้อผิดพลาด', 'บันทึกข้อมูลแบบกลุ่มล้มเหลว', 'error');
                     }
                 })();
                 window.tempSchList = []; 
@@ -3425,6 +3428,7 @@
                 if(await Swal.fire({title: 'ยืนยันการลบ?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
                     
                     let itemToDelete = window.scheduleBaseData.find(item => String(item.originalIndex) === String(rowIndexStr));
+                    if(!itemToDelete) return Swal.fire('ข้อผิดพลาด', 'ไม่พบข้อมูลที่จะลบ', 'error');
 
                     window.scheduleBaseData = window.scheduleBaseData.filter(item => String(item.originalIndex) !== String(rowIndexStr));
                     if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
@@ -3434,36 +3438,30 @@
                     window.pendingSchBaseSync++;
                     window.updateSchBaseSyncStatus();
 
+                    // คลีนข้อมูลก่อนส่ง
+                    let cleanData = { ...itemToDelete };
+                    delete cleanData.originalIndex;
+                    delete cleanData.isPending;
+
                     try {
-                        let p1 = callAPI('deleteData', { sheetName: targetSheetName, rowIndex: parseInt(rowIndexStr) }, true);
-                        let p2 = Promise.resolve();
+                        // ส่งลบข้อมูลที่ชีทหลัก
+                        await callAPI('deleteData', { sheetName: targetSheetName, rowData: cleanData }, true);
 
-                        // ลบในชีท 'กำหนดตารางสอน' ด้วย หากลบในหน้า 'ล๊อคตาราง'
-                        if (isLockMode && itemToDelete) {
-                            let otherSheetData = await getCachedData('กำหนดตารางสอน');
-                            let otherRowIndex = otherSheetData.findIndex(item => 
-                                !item._isDeleting && // <-- เพิ่มการเช็คเพื่อไม่ให้ลบข้อมูลแถวเดิมซ้ำ
-                                String(item['วัน']).trim() === String(itemToDelete['วัน']).trim() &&
-                                String(item['คาบที่']).trim() === String(itemToDelete['คาบที่']).trim() &&
-                                String(item['ห้องเรียน']).trim() === String(itemToDelete['ห้องเรียน']).trim() &&
-                                String(item['รหัสวิชา']).trim() === String(itemToDelete['รหัสวิชา']).trim()
-                            );
-                            if (otherRowIndex !== -1) {
-                                otherSheetData[otherRowIndex]._isDeleting = true; // <-- มาร์คว่าใช้งานแถวนี้แล้ว
-                                p2 = callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowIndex: otherRowIndex }, true);
-                            }
+                        // หากลบในหน้า "ล๊อคตาราง" ต้องส่งไปลบใน "กำหนดตารางสอน" ด้วย โดยใช้ข้อมูลชุดเดียวกัน
+                        if (isLockMode) {
+                            await callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowData: cleanData }, true);
                         }
-
-                        await Promise.all([p1, p2]);
 
                         window.pendingSchBaseSync--;
                         if(window.pendingSchBaseSync === 0) {
-                            if(isLockMode) getCachedData('กำหนดตารางสอน', true, true);
+                            await new Promise(resolve => setTimeout(resolve, 1500)); 
+                            if(isLockMode) await getCachedData('กำหนดตารางสอน', true, true);
                             let newData = await getCachedData(targetSheetName, true, true);
                             window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index}));
                             if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
                         }
                         window.updateSchBaseSyncStatus();
+                        Swal.fire({icon: 'success', title: 'ลบสำเร็จ', text: 'ลบรายการเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false});
                     } catch(err) {
                         window.pendingSchBaseSync--;
                         window.updateSchBaseSyncStatus();
@@ -4717,6 +4715,9 @@
                 if(await Swal.fire({title: 'ยืนยันการลบรายวิชานี้?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'ลบเลย'}).then(r => r.isConfirmed)){
                     closeSchModal();
                     
+                    let itemToDelete = window.interactiveSchData.find(item => String(item.originalIndex) === String(rowIndex));
+                    if(!itemToDelete) return Swal.fire('ข้อผิดพลาด', 'ไม่พบข้อมูลที่จะลบ', 'error');
+
                     window.interactiveSchData = window.interactiveSchData.filter(item => String(item.originalIndex) !== String(rowIndex));
                     refreshSchGrid();
 
@@ -4725,8 +4726,16 @@
                     window.pendingSyncCount++;
                     window.updateSyncStatus();
 
+                    // คลีนข้อมูลก่อนส่ง
+                    let cleanData = { ...itemToDelete };
+                    delete cleanData.originalIndex;
+                    delete cleanData.isPending;
+                    delete cleanData.allRooms;      // เอาออกกรณีโหมดครู
+                    delete cleanData.allTeachers;   // เอาออกกรณีโหมดนักเรียน
+
                     try {
-                        let res = await callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowIndex: parseInt(rowIndex) }, true);
+                        await callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowData: cleanData }, true);
+                        
                         window.pendingSyncCount--;
                         if(window.pendingSyncCount === 0) {
                             let newData = await getCachedData('กำหนดตารางสอน', true, true);
@@ -4734,10 +4743,12 @@
                             refreshSchGrid();
                         }
                         window.updateSyncStatus();
+                        Swal.fire({icon: 'success', title: 'ลบสำเร็จ', text: 'ลบรายวิชาในตารางเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false});
                     } catch(err) {
                         window.pendingSyncCount--;
                         window.updateSyncStatus();
-                        Swal.fire('ข้อผิดพลาด', 'การลบข้อมูลขัดข้อง กรุณาโหลดตารางใหม่', 'error');
+                        Swal.fire('ข้อผิดพลาด', err.message || 'การลบข้อมูลขัดข้อง', 'error');
+                        window.forceRefreshSchGrid(true);
                     }
                 }
             };
