@@ -1370,10 +1370,8 @@
                     let matchGroup = filterGroup === 'all' || c['กลุ่มสาระการเรียนรู้'] === filterGroup;
                     let matchTerm = filterTerm === 'all' || String(c['ภาคเรียนที่']).trim() === String(filterTerm).trim();
                     
-                    // ปรับปรุงการเปรียบเทียบชื่อครูโดยล้างช่องว่างส่วนเกินออกก่อน
-                    let cTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
-                    let fTeacher = String(filterTeacher || '').replace(/\s+/g, ' ').trim();
-                    let matchTeacher = filterTeacher === 'all' || cTeacher === fTeacher;
+                    let fTeacher = String(filterTeacher || '').replace(/\s+/g, '');
+                    let matchTeacher = filterTeacher === 'all' || String(c['ชื่อครูผู้สอน'] || '').split(',').map(t=>t.replace(/\s+/g, '')).includes(fTeacher);
                     
                     let matchGrade = true;
                     if (filterGrade !== 'all') {
@@ -2596,7 +2594,9 @@
                     window.scheduleBaseData.forEach(slot => {
                         if (dayChks.includes(slot['วัน']) && periodChks.includes(parseInt(slot['คาบที่']))) {
                             if (existingData && slot.originalIndex === existingData.originalIndex) return;
-                            if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).trim());
+                            if (slot['ชื่อครูผู้สอน']) {
+                                String(slot['ชื่อครูผู้สอน']).split(',').forEach(t => busyTeachers.add(t.replace(/\s+/g, '')));
+                            }
                         }
                     });
                 }
@@ -2605,14 +2605,14 @@
                 targetCourses.forEach(c => {
                     let code = String(c['รหัสวิชา'] || '').trim();
                     let name = String(c['ชื่อวิชา'] || '').trim();
-                    let teacher = String(c['ชื่อครูผู้สอน'] || '').trim();
+                    let teacherList = String(c['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
                     let creditStr = String(c['หน่วยกิต'] || '').trim();
                     let credit = parseFloat(creditStr);
                     let required = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0; 
                     let scheduled = scheduledCounts[code] || 0;
                     let remaining = required - scheduled;
                     
-                    let isBusy = busyTeachers.has(teacher);
+                    let isBusy = teacherList.some(t => busyTeachers.has(t));
                     let isEditingThis = existingData && existingData['รหัสวิชา'] === code;
 
                     // ในโหมดล๊อควิชา ปล่อยให้เลือกรายวิชาได้อิสระ ไม่จำกัดหน่วยกิตและไม่เช็คครูติดสอน
@@ -2720,7 +2720,7 @@
 
                 let filtered = window.scheduleBaseData.filter(d => {
                     let matchRoom = (room === 'all') || (d['ห้องเรียน'] === room);
-                    let matchTeacher = (teacher === 'all') || (d['ชื่อครูผู้สอน'] === teacher);
+                    let matchTeacher = (teacher === 'all') || String(d['ชื่อครูผู้สอน'] || '').split(',').map(t=>t.replace(/\s+/g, '')).includes(String(teacher).replace(/\s+/g, ''));
                     let matchCode = (codeSearch === '') || 
                                     (String(d['รหัสวิชา'] || '').toLowerCase().includes(codeSearch)) || 
                                     (String(d['ชื่อวิชา'] || '').toLowerCase().includes(codeSearch));
@@ -3224,8 +3224,12 @@
                                         let sLocation = String(slot['สถานที่เรียน'] || '').trim();
                                         let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
-                                        if (teacher !== '' && sTeacher === teacher) {
-                                            let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                        let inputTeacherList = teacher.split(',').map(t => t.replace(/\s+/g, ''));
+                                        let sTeacherList = sTeacher.split(',').map(t => t.replace(/\s+/g, ''));
+                                        let hasCommonTeacher = inputTeacherList.some(t => sTeacherList.includes(t) && t !== '');
+
+                                        if (hasCommonTeacher) {
+                                            let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
                                             if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
                                                 conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
                                             } else {
@@ -3286,8 +3290,12 @@
                                     let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
                                     let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
-                                    if (teacher !== '' && sTeacher === teacher) {
-                                        let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                                    let inputTeacherList = teacher.split(',').map(t => t.replace(/\s+/g, ''));
+                                    let sTeacherList = sTeacher.split(',').map(t => t.replace(/\s+/g, ''));
+                                    let hasCommonTeacher = inputTeacherList.some(t => sTeacherList.includes(t) && t !== '');
+
+                                    if (hasCommonTeacher) {
+                                        let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
                                         if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
                                             conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
                                         } else {
@@ -3957,8 +3965,12 @@
                 } else {
                     if (!teacher) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกครูผู้สอนก่อน', 'warning');
                     titleText = 'ตารางสอนของ ' + teacher;
-                    let targetTeacherName = String(teacher).replace(/\s+/g, ' ').trim();
-                    targetData = window.interactiveSchData.filter(d => String(d['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === targetTeacherName);
+                    // แก้ไข: ให้ค้นหาชื่อครูจากรายการที่คั่นด้วยลูกน้ำ และลบช่องว่างออกก่อนเทียบ
+                    let targetTeacherMatch = String(teacher).replace(/\s+/g, '');
+                    targetData = window.interactiveSchData.filter(d => {
+                        let tList = String(d['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
+                        return tList.includes(targetTeacherMatch);
+                    });
                 }
 
                 document.getElementById('gridContainer').classList.remove('hidden');
@@ -4186,12 +4198,13 @@
                     totalTarget = targetCourses.length;
                 } else {
                     let targetTeacherName = String(teacher || '').replace(/\s+/g, ' ').trim();
+                    let targetTeacherMatch = targetTeacherName.replace(/\s+/g, '');
                     let currentTerm = String(window.interactiveCurrentTerm || '').trim();
                     
                     targetCourses = window.interactiveCourses.filter(c => {
-                        let cTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                        let cTeachers = String(c['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
                         let cTerm = String(c['ภาคเรียนที่'] || '').trim();
-                        return cTeacher === targetTeacherName && cTerm === currentTerm;
+                        return cTeachers.includes(targetTeacherMatch) && cTerm === currentTerm;
                     });
                     
                     targetCourses.forEach(c => {
@@ -4224,10 +4237,10 @@
                         let credit = parseFloat(creditStr);
                         let required = (!isNaN(credit) && credit > 0) ? (credit * 2 * numRooms) : 0;
                         
-                        let scheduled = window.interactiveSchData.filter(s => 
-                            String(s['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === targetTeacherName && 
-                            String(s['รหัสวิชา'] || '').trim() === code
-                        ).length;
+                        let scheduled = window.interactiveSchData.filter(s => {
+                            let sTeachers = String(s['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
+                            return sTeachers.includes(targetTeacherMatch) && String(s['รหัสวิชา'] || '').trim() === code;
+                        }).length;
                         
                         if (required > 0) {
                             if (scheduled >= required) {
@@ -4318,9 +4331,9 @@
                 const day = document.getElementById('m_day').value;
                 const periodChks = Array.from(document.querySelectorAll('.m-period-chk:checked')).map(c => parseInt(c.value));
                 
-                let currentTeacher = '';
+                let currentTeacherMatch = '';
                 if (window.interactiveViewMode === 'teacher') {
-                    currentTeacher = String(document.getElementById('grid_t_name').value || '').replace(/\s+/g, ' ').trim();
+                    currentTeacherMatch = String(document.getElementById('grid_t_name').value || '').replace(/\s+/g, '');
                 }
 
                 if(periodChks.length === 0) {
@@ -4339,8 +4352,9 @@
                     if (!matchTerm) return false;
                     
                     if (window.interactiveViewMode === 'teacher') {
-                        let cTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
-                        if (cTeacher !== currentTeacher) return false;
+                        // แก้ไข: รองรับการเช็คชื่อครูในวิชาที่สอนคู่กัน
+                        let cTeachers = String(c['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
+                        if (!cTeachers.includes(currentTeacherMatch)) return false;
                         if (room) {
                              let cRooms = (c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '').split(',').map(r => r.trim()).filter(r => r);
                              let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
@@ -4380,7 +4394,11 @@
                         scheduledCounts[code]++;
                     });
                 } else {
-                    roomData = window.interactiveSchData.filter(d => String(d['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === currentTeacher);
+                    // แก้ไข: นับคาบของครูรายคน (รองรับสอนคู่)
+                    roomData = window.interactiveSchData.filter(d => {
+                        let dTeachers = String(d['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
+                        return dTeachers.includes(currentTeacherMatch);
+                    });
                     roomData.forEach(slot => {
                         let code = String(slot['รหัสวิชา'] || '').trim();
                         if (existingData && slot.originalIndex === existingData.originalIndex) return;
@@ -4397,7 +4415,9 @@
                 window.interactiveSchData.forEach(slot => {
                     if (slot['วัน'] === day && periodChks.includes(parseInt(slot['คาบที่']))) {
                         if (existingData && slot.originalIndex === existingData.originalIndex) return;
-                        if (slot['ชื่อครูผู้สอน']) busyTeachers.add(String(slot['ชื่อครูผู้สอน']).replace(/\s+/g, ' ').trim());
+                        if (slot['ชื่อครูผู้สอน']) {
+                            String(slot['ชื่อครูผู้สอน']).split(',').forEach(t => busyTeachers.add(t.replace(/\s+/g, '')));
+                        }
                     }
                 });
                 
@@ -4405,7 +4425,7 @@
                 targetCourses.forEach(c => {
                     let code = String(c['รหัสวิชา'] || '').trim();
                     let name = String(c['ชื่อวิชา'] || '').trim();
-                    let teacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                    let teacherList = String(c['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
                     let creditStr = String(c['หน่วยกิต'] || '').trim();
                     let credit = parseFloat(creditStr);
                     let required = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0; 
@@ -4425,10 +4445,10 @@
                     }
                     
                     let remaining = required - scheduled;
-                    let isBusy = busyTeachers.has(teacher);
+                    let isBusy = teacherList.some(t => busyTeachers.has(t));
                     let isEditingThis = existingData && existingData['รหัสวิชา'] === code;
 
-                    if (window.interactiveViewMode === 'teacher' && teacher === currentTeacher) {
+                    if (window.interactiveViewMode === 'teacher' && teacherList.includes(currentTeacherMatch)) {
                         isBusy = false; 
                     }
 
@@ -4537,14 +4557,14 @@
                     document.getElementById('m_room_plan_container').classList.remove('hidden');
                     document.getElementById('m_teacher').value = document.getElementById('grid_t_name').value;
                     
-                    let currentTeacher = String(document.getElementById('grid_t_name').value || '').replace(/\s+/g, ' ').trim();
+                    let currentTeacherMatch = String(document.getElementById('grid_t_name').value || '').replace(/\s+/g, '');
                     let teacherRooms = new Set();
                     
                     window.interactiveCourses.forEach(c => {
-                        let courseTeacher = String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim();
+                        let cTeachers = String(c['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
                         let courseTerm = String(c['ภาคเรียนที่'] || '').trim();
                         
-                        if (courseTeacher === currentTeacher && courseTerm === String(window.interactiveCurrentTerm).trim()) {
+                        if (cTeachers.includes(currentTeacherMatch) && courseTerm === String(window.interactiveCurrentTerm).trim()) {
                             let cRooms = (c['ชั้นที่สอน'] || c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
                             let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
                             
@@ -4739,7 +4759,7 @@
                 
                 if (window.interactiveViewMode === 'teacher') {
                     if (!room) {
-                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้องให้ถูกต้อง', 'warning');
+                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือระดับชั้น/ห้องให้ถูกต้อง', 'warning');
                     }
                     if (!plan) {
                         return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแผนการเรียน', 'warning');
@@ -4765,7 +4785,8 @@
                 for (let i = 0; i < latestData.length; i++) {
                     let s = latestData[i];
                     if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
-                    if (String(s['ห้องเรียน'] || '').trim() === room && String(s['รหัสวิชา'] || '').trim() === code) {
+                    // แก้ไขจุดที่ 1: ตรวจสอบจำนวนคาบแยกตาม ห้อง + แผนการเรียน
+                    if (String(s['ห้องเรียน'] || '').trim() === room && String(s['แผนการเรียน'] || '').trim() === plan && String(s['รหัสวิชา'] || '').trim() === code) {
                         currentCourseCount++;
                     }
                 }
@@ -4785,12 +4806,24 @@
                         if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
 
                         if (String(slot['วัน'] || '').trim() === day && parseInt(slot['คาบที่']) === p) {
+                            let sRoom = String(slot['ห้องเรียน'] || '').trim();
+                            let sPlan = String(slot['แผนการเรียน'] || '').trim();
+
+                            // [แก้ไขล่าสุด]: อนุญาตให้ห้องเดียวกันแต่คนละแผนการเรียน จัดลงในคาบเดียวกันได้ 
+                            // (ระบบจะข้ามการเช็คครูชนและห้องชนให้ทันที สำหรับกรณีเรียนรวมแผน)
+                            if (sRoom !== '' && sRoom !== '-' && sRoom === room && sPlan !== plan) {
+                                return; 
+                            }
+
                             let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
                             let sLocation = String(slot['สถานที่เรียน'] || '').trim();
-                            let sRoom = String(slot['ห้องเรียน'] || '').trim();
 
-                            if (teacher !== '' && sTeacher === teacher) {
-                                let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
+                            let inputTeacherList = teacher.split(',').map(t => t.replace(/\s+/g, ''));
+                            let sTeacherList = sTeacher.split(',').map(t => t.replace(/\s+/g, ''));
+                            let hasCommonTeacher = inputTeacherList.some(t => sTeacherList.includes(t) && t !== '');
+
+                            if (hasCommonTeacher) {
+                                let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
                                 if (String(slot['รหัสวิชา'] || '').trim() === 'กิจกรรม' || sRoom === '-') {
                                     conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
                                 } else {
@@ -4802,8 +4835,10 @@
                                 conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
                             }
                             
-                            if (sRoom !== '' && sRoom !== '-' && sRoom === room) {
-                                conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
+                            // เช็คชั้นเรียนชน โดยยึด "ห้อง + แผนการเรียน"
+                            if (sRoom !== '' && sRoom !== '-' && sRoom === room && sPlan === plan) {
+                                let planText = plan ? ` (แผนฯ ${plan})` : '';
+                                conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}${planText}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
                             }
                         }
                     });
@@ -4917,6 +4952,16 @@
             let rooms = (settings.rooms || '').split(',').map(r => r.trim()).filter(r => r);
             let plans = learningPlans;
 
+            // Helper: แปลงข้อความให้ลบเว้นวรรคทั้งหมด เพื่อเปรียบเทียบชื่อครูได้แม่นยำ
+            const normalizeStr = (str) => String(str || '').replace(/\s+/g, '');
+
+            // Helper: แปลงชื่อครูจากที่พิมพ์ (อาจเว้นวรรคผิด) ให้ตรงกับฐานข้อมูลครูเป๊ะๆ
+            const getStandardTeacherName = (rawName) => {
+                let matchName = normalizeStr(rawName);
+                let found = teachers.find(t => normalizeStr(t['ชื่อ-สกุล']) === matchName);
+                return found ? found['ชื่อ-สกุล'] : String(rawName).trim();
+            };
+
             // ประมวลผลและจัดกลุ่มข้อมูลตารางสอน (Client-side Processing)
             let processedData = { student: {}, teacher: {} };
             if (rawData && rawData.length > 0) {
@@ -4929,10 +4974,11 @@
                         processedData.student[room].push(slot);
                     }
                     if (teacherStr !== '' && teacherStr !== '-') {
-                        let teacherList = teacherStr.split(',').map(t => t.trim()).filter(t => t);
+                        let teacherList = teacherStr.split(',').filter(t => t.trim());
                         teacherList.forEach(t => {
-                            if (!processedData.teacher[t]) processedData.teacher[t] = [];
-                            processedData.teacher[t].push(slot);
+                            let stdName = getStandardTeacherName(t);
+                            if (!processedData.teacher[stdName]) processedData.teacher[stdName] = [];
+                            processedData.teacher[stdName].push(slot);
                         });
                     }
                 });
@@ -5028,16 +5074,13 @@
                 const teacherSelect = document.getElementById('dl_teacher');
                 let filteredTeachers = teachers;
                 
-                // ฟังก์ชันตัวช่วยกำจัดช่องว่างส่วนเกิน เพื่อให้กรองได้แม่นยำ
-                const normalizeStr = (str) => String(str || '').replace(/\s+/g, ' ').trim();
-                
                 if (group !== 'all') {
-                    filteredTeachers = teachers.filter(t => normalizeStr(t['กลุ่มสาระการเรียนรู้']) === normalizeStr(group));
+                    filteredTeachers = teachers.filter(t => t['กลุ่มสาระการเรียนรู้'] === group);
                 }
                 
                 teacherSelect.innerHTML = `
                     <option value="all">ทุกคนในกลุ่มสาระ</option>
-                    ${filteredTeachers.map(t => `<option value="${String(t['ชื่อ-สกุล'] || '').trim()}">${normalizeStr(t['ชื่อ-สกุล'])}</option>`).join('')}
+                    ${filteredTeachers.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('')}
                 `;
             }
 
@@ -5099,31 +5142,24 @@
                     const selectedGroup = document.getElementById('dl_group').value;
                     const selectedTeacher = document.getElementById('dl_teacher').value;
 
-                    // ฟังก์ชันตัวช่วยกำจัดช่องว่างส่วนเกินทั้งหมด เพื่อให้เปรียบเทียบชื่อได้แม่นยำ 100%
-                    const normalizeStr = (str) => String(str || '').replace(/\s+/g, ' ').trim();
-                    const normalizedSelectedTeacher = normalizeStr(selectedTeacher);
-                    const normalizedSelectedGroup = normalizeStr(selectedGroup);
-
-                    // สร้าง Lookup สำหรับหากลุ่มสาระของครู
+                    // สร้าง Lookup สำหรับหากลุ่มสาระของครู (คีย์เป็นชื่อมาตรฐานแล้ว)
                     const teacherGroupMap = {};
                     teachers.forEach(t => {
-                        teacherGroupMap[normalizeStr(t['ชื่อ-สกุล'])] = normalizeStr(t['กลุ่มสาระการเรียนรู้']);
+                        teacherGroupMap[t['ชื่อ-สกุล']] = t['กลุ่มสาระการเรียนรู้'];
                     });
 
                     let teachersToProcess = [];
 
                     if (selectedTeacher !== 'all') {
-                        // เลือกครูคนเดียว: ค้นหาจากคีย์ที่มีอยู่ในตารางสอน (ที่อาจมีช่องว่างไม่ตรงกันเป๊ะ)
-                        let actKey = Object.keys(processedData.teacher).find(k => normalizeStr(k) === normalizedSelectedTeacher);
-                        if (actKey) {
-                            teachersToProcess = [actKey];
+                        if (processedData.teacher[selectedTeacher]) {
+                            teachersToProcess = [selectedTeacher];
                         }
                     } else {
                         // เลือก "ทุกคนในกลุ่มสาระ"
                         teachersToProcess = Object.keys(processedData.teacher).filter(teacherKey => {
                             if (selectedGroup === 'all') return true;
-                            let tGroup = teacherGroupMap[normalizeStr(teacherKey)];
-                            return tGroup === normalizedSelectedGroup;
+                            let tGroup = teacherGroupMap[teacherKey];
+                            return tGroup === selectedGroup;
                         });
                     }
 
@@ -5138,7 +5174,7 @@
                     }
 
                     teachersToProcess.forEach(teacherKey => {
-                        let tGroup = teacherGroupMap[normalizeStr(teacherKey)] || 'ไม่ระบุกลุ่มสาระ';
+                        let tGroup = teacherGroupMap[teacherKey] || 'ไม่ระบุกลุ่มสาระ';
                         let scheduleMap = processedData.teacher[teacherKey] || [];
                         
                         // คำนวณจำนวนคาบต่อสัปดาห์ (นับเฉพาะคาบที่ไม่ซ้ำกัน เผื่อกรณีสอนควบห้องในคาบเดียวกัน)
@@ -5165,8 +5201,17 @@
                 // เรียงลำดับตารางให้เป็นระเบียบตามชื่อห้องและแผน
                 tablesToRender.sort((a,b) => a.sortKey.localeCompare(b.sortKey));
 
+                // คำนวณหาคาบสูงสุดในข้อมูล เผื่อกรณีข้อมูลมีคาบ 9 แต่ตั้งค่าระบบไว้แค่ 8
+                let basePeriods = settings.periods || 8;
+                let maxPeriod = basePeriods;
+                tablesToRender.forEach(table => {
+                    table.scheduleMap.forEach(d => {
+                        let p = parseInt(d['คาบที่']);
+                        if (p > maxPeriod) maxPeriod = p;
+                    });
+                });
+
                 // คำนวณเวลาและคาบพักสำหรับสร้างหัวตาราง (เหมือนกันทุกตาราง)
-                let periods = settings.periods || 8;
                 let breakPeriod = parseInt(settings.break_period || 4);
                 let breakDuration = parseInt(settings.break_duration || 60);
                 let periodDuration = parseInt(settings.duration || 50);
@@ -5175,7 +5220,7 @@
 
                 let thsTemplate = '';
                 let currentTimeMinHeader = initialTimeMin;
-                for(let i=1; i<=periods; i++) {
+                for(let i=1; i<=maxPeriod; i++) {
                     let isBreak = (i === breakPeriod);
                     let currentDur = isBreak ? breakDuration : periodDuration;
                     let startStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
@@ -5202,7 +5247,7 @@
                     days.forEach(day => {
                         let tds = '';
                         let i = 1;
-                        while(i <= periods) {
+                        while(i <= maxPeriod) {
                             if (i === breakPeriod) {
                                 tds += `<td class="border border-navy p-2 text-center align-middle bg-gray-100 text-gray-500 text-xs w-16">
                                             <i class="fas fa-utensils mb-1"></i><br>พัก
@@ -5217,7 +5262,7 @@
 
                             if (slots.length > 0) {
                                 let nextI = i + 1;
-                                while (nextI <= periods && nextI !== breakPeriod) {
+                                while (nextI <= maxPeriod && nextI !== breakPeriod) {
                                     let nextSlots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === nextI);
                                     if (window.areSlotsEqual(slots, nextSlots)) {
                                         colspan++;
@@ -5666,16 +5711,31 @@
                 subjectGroups.forEach(g => departments[g] = []);
 
                 teachers.forEach(t => {
-                    let name = t['ชื่อ-สกุล'];
+                    let name = String(t['ชื่อ-สกุล'] || '').trim();
+                    let matchName = name.replace(/\s+/g, ''); // ลบช่องว่างออกทั้งหมดเพื่อเปรียบเทียบให้แม่นยำ
                     let group = t['กลุ่มสาระการเรียนรู้'];
                     if (!departments[group]) departments[group] = [];
                     
-                    let teacherCourses = activeCourses.filter(c => String(c['ชื่อครูผู้สอน'] || '').replace(/\s+/g, ' ').trim() === String(name).replace(/\s+/g, ' ').trim());
+                    // กรองรายวิชาจากอัตรากำลังที่ครูท่านนี้มีส่วนร่วมสอน (รองรับการสอนร่วมกันแบบคั่นด้วย ,)
+                    let teacherCourses = activeCourses.filter(c => {
+                        let cTeachers = String(c['ชื่อครูผู้สอน'] || '').split(',').map(x => x.replace(/\s+/g, ''));
+                        return cTeachers.includes(matchName);
+                    });
+                    
+                    // กรองกิจกรรมจากล๊อคตาราง
+                    let teacherLocked = lockedData.filter(l => {
+                        let lTeachers = String(l['ชื่อครูผู้สอน'] || '').split(',').map(x => x.replace(/\s+/g, ''));
+                        return lTeachers.includes(matchName);
+                    });
                     
                     let courseMap = {};
                     
+                    // 1. นำรายวิชาหลักจากอัตรากำลังมาคำนวณชั่วโมง
                     teacherCourses.forEach(c => {
                         let cCode = String(c['รหัสวิชา'] || '').trim();
+                        let cName = String(c['ชื่อวิชา'] || '').trim();
+                        let key = cCode + '_' + cName;
+                        
                         let roomsStr = c['ชั้นที่เปิดสอน'] || c['ชั้นที่สอน'] || '';
                         let plansStr = c['แผนการเรียน'] || '';
                         
@@ -5684,7 +5744,6 @@
                         
                         let numRooms = cRooms.length;
                         
-                        // หากไม่ได้ระบุห้อง แต่ระบุแผนการเรียน ให้ประเมินจำนวนห้องจากแผนการเรียน
                         if (numRooms === 0 && cPlans.length > 0) {
                             let tempRooms = [];
                             cPlans.forEach(p => {
@@ -5695,21 +5754,19 @@
                             if (numRooms > 0) cRooms = uniqueTempRooms;
                         }
                         
-                        if (numRooms === 0) numRooms = 1; // อย่างน้อย 1 กลุ่ม
+                        if (numRooms === 0) numRooms = 1; 
 
-                        if (!courseMap[cCode]) {
-                            courseMap[cCode] = {
-                                name: String(c['ชื่อวิชา'] || '').trim(),
-                                rooms: new Set(),
-                                hours: 0
+                        if (!courseMap[key]) {
+                            courseMap[key] = {
+                                code: cCode, name: cName, rooms: new Set(), hours: 0, slots: new Set()
                             };
                         }
                         
                         if (cRooms.length > 0) {
-                            cRooms.forEach(r => courseMap[cCode].rooms.add(r));
+                            cRooms.forEach(r => courseMap[key].rooms.add(r));
                         } else {
-                            if (cPlans.length > 0) courseMap[cCode].rooms.add(cPlans.join(', '));
-                            else courseMap[cCode].rooms.add('-');
+                            if (cPlans.length > 0) courseMap[key].rooms.add(cPlans.join(', '));
+                            else courseMap[key].rooms.add('-');
                         }
                         
                         let creditStr = String(c['หน่วยกิต'] || '').trim();
@@ -5717,30 +5774,50 @@
                         // 1.0 หน่วยกิต = 2 คาบ/สัปดาห์ * จำนวนห้อง
                         let required = (!isNaN(credit) && credit > 0) ? (credit * 2 * numRooms) : 0; 
                         
-                        courseMap[cCode].hours += required;
+                        courseMap[key].hours += required;
                     });
                     
-                    // แปลงข้อมูลเป็น Array สำหรับวิชาทั้งหมดของครูท่านนี้
-                    let coursesArr = Object.keys(courseMap).map(code => {
-                        let c = courseMap[code];
+                    // 2. นำกิจกรรม/โฮมรูม/วิชาเพิ่มเติมนอกเหนือจากอัตรากำลังมารวมด้วย
+                    teacherLocked.forEach(l => {
+                        let lCode = String(l['รหัสวิชา'] || '').trim();
+                        let lName = String(l['ชื่อวิชา'] || '').trim();
+                        if (!lCode || lCode === 'กิจกรรม') lCode = 'กิจกรรม';
+                        if (!lName) lName = lCode;
+                        
+                        let key = lCode + '_' + lName;
+                        let lRoom = String(l['ห้องเรียน'] || '').trim();
+                        
+                        if (!courseMap[key]) {
+                            courseMap[key] = {
+                                code: lCode, name: lName, rooms: new Set(), hours: 0, slots: new Set()
+                            };
+                        }
+                        
+                        if (lRoom && lRoom !== '-') courseMap[key].rooms.add(lRoom);
+                        else if (courseMap[key].rooms.size === 0) courseMap[key].rooms.add('-');
+                        
+                        courseMap[key].slots.add(l['วัน'] + '_' + l['คาบที่']);
+                    });
+                    
+                    // แปลงข้อมูลสรุปสุดท้าย
+                    let coursesArr = Object.values(courseMap).map(c => {
                         let roomsArr = Array.from(c.rooms).sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: 'base'}));
                         
-                        // ดึงระดับชั้นจากคำนำหน้าของห้องเรียน (เช่น "ม.4/1" -> "ม.4")
                         let grades = new Set();
                         roomsArr.forEach(r => {
-                            if (r.includes('/')) {
-                                grades.add(r.split('/')[0].trim());
-                            } else if (r.startsWith('ม.')) {
-                                grades.add(r);
-                            }
+                            if (r.includes('/')) grades.add(r.split('/')[0].trim());
+                            else if (r.startsWith('ม.')) grades.add(r);
                         });
                         
+                        // ถ้าชั่วโมงจากอัตรากำลังมีค่า ให้ยึดตามนั้น แต่ถ้าเป็น 0 (เช่นพวกกิจกรรมที่ล๊อคไว้) ให้นับจำนวนคาบที่จัดจริง
+                        let finalHours = c.hours > 0 ? c.hours : c.slots.size;
+                        
                         return {
-                            code: code,
+                            code: c.code,
                             name: c.name,
                             grade: grades.size > 0 ? Array.from(grades).join(', ') : '-',
                             rooms: roomsArr.join(', ') || '-',
-                            hours: c.hours
+                            hours: finalHours
                         };
                     });
                     
