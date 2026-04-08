@@ -4066,8 +4066,10 @@
                                     let displaySub = '';
                                     if (window.interactiveViewMode === 'student') {
                                         let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
-                                        let cleanName = teacherName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                        displaySub = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                        displaySub = teacherName.split(',').map(name => {
+                                            let cleanName = name.trim().replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
+                                            return cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                        }).filter(n => n).join(', ');
                                     } else {
                                         if (slot.allRooms && slot.allRooms.length > 0) {
                                             displaySub = slot.allRooms.includes('-') ? 'กิจกรรม' : 'ชั้น ' + slot.allRooms.join(', ');
@@ -4920,15 +4922,18 @@
             if (rawData && rawData.length > 0) {
                 rawData.forEach(slot => {
                     let room = String(slot['ห้องเรียน'] || '').trim();
-                    let teacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                    let teacherStr = String(slot['ชื่อครูผู้สอน'] || '').trim();
                     
                     if (room !== '' && room !== '-') {
                         if (!processedData.student[room]) processedData.student[room] = [];
                         processedData.student[room].push(slot);
                     }
-                    if (teacher !== '' && teacher !== '-') {
-                        if (!processedData.teacher[teacher]) processedData.teacher[teacher] = [];
-                        processedData.teacher[teacher].push(slot);
+                    if (teacherStr !== '' && teacherStr !== '-') {
+                        let teacherList = teacherStr.split(',').map(t => t.trim()).filter(t => t);
+                        teacherList.forEach(t => {
+                            if (!processedData.teacher[t]) processedData.teacher[t] = [];
+                            processedData.teacher[t].push(slot);
+                        });
                     }
                 });
             }
@@ -5259,12 +5264,13 @@
                                         if(settings.show_name) innerHtml += `<div class="text-[11px] text-navy leading-tight">${slot['ชื่อวิชา']}</div>`;
                                         
                                         if(settings.show_teacher && type === 'student') {
-                                            let teachersList = slot.allTeachers || [slot['ชื่อครูผู้สอน']];
+                                            let rawTeachers = slot.allTeachers ? slot.allTeachers.join(',') : slot['ชื่อครูผู้สอน'];
+                                            let teachersList = String(rawTeachers || '').split(',').map(t => t.trim()).filter(t => t);
                                             let cleanNames = teachersList.map(tName => {
                                                 let cleanName = String(tName || '').replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
                                                 return cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
                                             }).filter(n => n);
-                                            let displayTeacher = cleanNames.join(', ');
+                                            let displayTeacher = [...new Set(cleanNames)].join(', ');
                                             innerHtml += `<div class="text-[10px] text-blue-700 mt-1">${displayTeacher}</div>`;
                                         }
                                         
