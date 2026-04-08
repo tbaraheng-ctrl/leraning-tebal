@@ -334,6 +334,11 @@
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: formData.toString()
                 });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const result = await response.json();
                 if (!isBackground) showLoading(false);
                 
@@ -342,6 +347,13 @@
             } catch (error) {
                 if (!isBackground) showLoading(false);
                 console.error('API Error:', error.message);
+                if (error.message.includes('Failed to fetch') && !isBackground) {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'ข้อผิดพลาดเครือข่าย',
+                        text: 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้ กรุณาตรวจสอบว่า SCRIPT_URL ถูกต้อง และ Web App บน Google Apps Script เปิดสิทธิ์เป็น "ทุกคน (Anyone)" แล้ว'
+                    });
+                }
                 throw error; 
             }
         }
@@ -2156,8 +2168,9 @@
             window.autoSyncInterval = setInterval(() => {
                 const activeEl = document.activeElement;
                 const isTypingOrSelecting = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
+                const schBaseModalEl = document.getElementById('schBaseModal');
 
-                if (window.pendingSchBaseSync === 0 && document.getElementById('schBaseModal').classList.contains('hidden') && !isTypingOrSelecting) {
+                if (window.pendingSchBaseSync === 0 && schBaseModalEl && schBaseModalEl.classList.contains('hidden') && !isTypingOrSelecting) {
                     window.refreshSchBaseTable(true); 
                 }
             }, 5000);
@@ -2769,10 +2782,13 @@
                 window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index}));
                 window.filterSchBaseTable();
                 
-                if (!document.getElementById('schBaseModal').classList.contains('hidden')) {
-                    if (!document.getElementById('schForm').classList.contains('hidden')) {
+                const schBaseModalEl = document.getElementById('schBaseModal');
+                if (schBaseModalEl && !schBaseModalEl.classList.contains('hidden')) {
+                    const schFormEl = document.getElementById('schForm');
+                    if (schFormEl && !schFormEl.classList.contains('hidden')) {
                         window.updateMainFormDropdowns(window.currentEditingData_base);
-                        if (!document.getElementById('locationPickerModal').classList.contains('hidden') && window.currentLocTarget === 'sch_location') {
+                        const locModalEl = document.getElementById('locationPickerModal');
+                        if (locModalEl && !locModalEl.classList.contains('hidden') && window.currentLocTarget === 'sch_location') {
                             document.getElementById('locationGridContainer').innerHTML = window.baseLocationHtml;
                         }
                     }
@@ -2826,14 +2842,18 @@
                             // กรณีแก้ไข ค้นหา rowId ของชีทกำหนดตารางสอนจากข้อมูลเก่า
                             let otherSheetData = await getCachedData('กำหนดตารางสอน');
                             let otherRowIndex = otherSheetData.findIndex(item => 
-                                item['วัน'] === oldItem['วัน'] &&
-                                String(item['คาบที่']) === String(oldItem['คาบที่']) &&
-                                item['ห้องเรียน'] === oldItem['ห้องเรียน'] &&
-                                item['รหัสวิชา'] === oldItem['รหัสวิชา'] &&
-                                item['ชื่อครูผู้สอน'] === oldItem['ชื่อครูผู้สอน']
+                                !item._isUpdating && // <-- เพิ่มการเช็คเพื่อไม่ให้อัปเดตข้อมูลแถวเดิมซ้ำ
+                                String(item['วัน']).trim() === String(oldItem['วัน']).trim() &&
+                                String(item['คาบที่']).trim() === String(oldItem['คาบที่']).trim() &&
+                                String(item['ห้องเรียน']).trim() === String(oldItem['ห้องเรียน']).trim() &&
+                                String(item['รหัสวิชา']).trim() === String(oldItem['รหัสวิชา']).trim()
                             );
                             if (otherRowIndex !== -1) {
+                                otherSheetData[otherRowIndex]._isUpdating = true; // <-- มาร์คว่าใช้งานแถวนี้แล้ว
                                 p2 = callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: otherRowIndex, data: data }, true);
+                            } else {
+                                // ถ้าหาไม่เจอให้เพิ่มเป็นรายการใหม่ในชีทกำหนดตารางสอนเลย เพื่อป้องกันข้อมูลหลุด
+                                p2 = callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data }, true);
                             }
                         }
                     }
@@ -3422,13 +3442,14 @@
                         if (isLockMode && itemToDelete) {
                             let otherSheetData = await getCachedData('กำหนดตารางสอน');
                             let otherRowIndex = otherSheetData.findIndex(item => 
-                                item['วัน'] === itemToDelete['วัน'] &&
-                                String(item['คาบที่']) === String(itemToDelete['คาบที่']) &&
-                                item['ห้องเรียน'] === itemToDelete['ห้องเรียน'] &&
-                                item['รหัสวิชา'] === itemToDelete['รหัสวิชา'] &&
-                                item['ชื่อครูผู้สอน'] === itemToDelete['ชื่อครูผู้สอน']
+                                !item._isDeleting && // <-- เพิ่มการเช็คเพื่อไม่ให้ลบข้อมูลแถวเดิมซ้ำ
+                                String(item['วัน']).trim() === String(itemToDelete['วัน']).trim() &&
+                                String(item['คาบที่']).trim() === String(itemToDelete['คาบที่']).trim() &&
+                                String(item['ห้องเรียน']).trim() === String(itemToDelete['ห้องเรียน']).trim() &&
+                                String(item['รหัสวิชา']).trim() === String(itemToDelete['รหัสวิชา']).trim()
                             );
                             if (otherRowIndex !== -1) {
+                                otherSheetData[otherRowIndex]._isDeleting = true; // <-- มาร์คว่าใช้งานแถวนี้แล้ว
                                 p2 = callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowIndex: otherRowIndex }, true);
                             }
                         }
@@ -3697,8 +3718,9 @@
             window.autoSyncInterval = setInterval(() => {
                 const activeEl = document.activeElement;
                 const isTypingOrSelecting = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
+                const schModalEl = document.getElementById('schModal');
 
-                if (window.pendingSyncCount === 0 && document.getElementById('schModal').classList.contains('hidden') && !isTypingOrSelecting) {
+                if (window.pendingSyncCount === 0 && schModalEl && schModalEl.classList.contains('hidden') && !isTypingOrSelecting) {
                     window.forceRefreshSchGrid(true); 
                 }
             }, 5000);
@@ -3910,15 +3932,20 @@
                 window.interactiveSchData = newDataList.map((d, index) => ({...d, originalIndex: index}));
                 window.interactiveCourses = newCourses;
                 
-                if (window.interactiveViewMode === 'student' && document.getElementById('grid_room').value) {
+                const gridRoomEl = document.getElementById('grid_room');
+                const gridTNameEl = document.getElementById('grid_t_name');
+                
+                if (window.interactiveViewMode === 'student' && gridRoomEl && gridRoomEl.value) {
                     window.refreshSchGrid();
-                } else if (window.interactiveViewMode === 'teacher' && document.getElementById('grid_t_name').value) {
+                } else if (window.interactiveViewMode === 'teacher' && gridTNameEl && gridTNameEl.value) {
                     window.refreshSchGrid();
                 }
                 
-                if (!document.getElementById('schModal').classList.contains('hidden')) {
+                const schModalEl = document.getElementById('schModal');
+                if (schModalEl && !schModalEl.classList.contains('hidden')) {
                     window.updateModalDropdowns(window.currentEditingData);
-                    if (!document.getElementById('locationPickerModal').classList.contains('hidden') && window.currentLocTarget === 'm_location') {
+                    const locModalEl = document.getElementById('locationPickerModal');
+                    if (locModalEl && !locModalEl.classList.contains('hidden') && window.currentLocTarget === 'm_location') {
                         document.getElementById('locationGridContainer').innerHTML = window.modalLocationHtml;
                     }
                 }
