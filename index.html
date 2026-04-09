@@ -1741,11 +1741,40 @@
                         <!-- การแสดงผล -->
                         <div>
                             <h4 class="font-bold text-navy border-b pb-1 mb-3">ตั้งค่าการแสดงผลในตาราง</h4>
-                            <div class="flex space-x-4">
+                            <div class="flex space-x-4 mb-5">
                                 <label><input type="checkbox" id="s_show_code" ${settings.show_code !== false ? 'checked' : ''}> รหัสวิชา</label>
                                 <label><input type="checkbox" id="s_show_name" ${settings.show_name !== false ? 'checked' : ''}> ชื่อวิชา</label>
                                 <label><input type="checkbox" id="s_show_teacher" ${settings.show_teacher !== false ? 'checked' : ''}> ชื่อครู</label>
                                 <label><input type="checkbox" id="s_show_room" ${settings.show_room !== false ? 'checked' : ''}> ห้องเรียน</label>
+                            </div>
+
+                            <!-- ส่วนที่เพิ่มใหม่: ตั้งค่าสีองค์ประกอบตาราง -->
+                            <h5 class="font-bold text-gray-700 border-b border-gray-200 pb-1 mb-3">กำหนดสีองค์ประกอบตาราง</h5>
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">พื้นหลังหัวตาราง</label>
+                                    <input type="color" id="s_color_th_bg" value="${settings.color_th_bg || '#1A2942'}" class="w-full h-10 border border-gray-300 rounded cursor-pointer p-0.5">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">ตัวอักษรหัวตาราง</label>
+                                    <input type="color" id="s_color_th_text" value="${settings.color_th_text || '#ffffff'}" class="w-full h-10 border border-gray-300 rounded cursor-pointer p-0.5">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">พื้นหลังช่องวัน</label>
+                                    <input type="color" id="s_color_day_bg" value="${settings.color_day_bg || '#F3E5AB'}" class="w-full h-10 border border-gray-300 rounded cursor-pointer p-0.5">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">ตัวอักษรช่องวัน</label>
+                                    <input type="color" id="s_color_day_text" value="${settings.color_day_text || '#1A2942'}" class="w-full h-10 border border-gray-300 rounded cursor-pointer p-0.5">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">พื้นหลังช่องพัก</label>
+                                    <input type="color" id="s_color_break_bg" value="${settings.color_break_bg || '#e5e7eb'}" class="w-full h-10 border border-gray-300 rounded cursor-pointer p-0.5">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-gray-600 mb-1">ตัวอักษรช่องพัก</label>
+                                    <input type="color" id="s_color_break_text" value="${settings.color_break_text || '#6b7280'}" class="w-full h-10 border border-gray-300 rounded cursor-pointer p-0.5">
+                                </div>
                             </div>
                         </div>
                         
@@ -2027,6 +2056,9 @@
                     break_duration: parseInt(document.getElementById('s_break_duration').value),
                     show_code: document.getElementById('s_show_code').checked, show_name: document.getElementById('s_show_name').checked,
                     show_teacher: document.getElementById('s_show_teacher').checked, show_room: document.getElementById('s_show_room').checked,
+                    color_th_bg: document.getElementById('s_color_th_bg').value, color_th_text: document.getElementById('s_color_th_text').value,
+                    color_day_bg: document.getElementById('s_color_day_bg').value, color_day_text: document.getElementById('s_color_day_text').value,
+                    color_break_bg: document.getElementById('s_color_break_bg').value, color_break_text: document.getElementById('s_color_break_text').value,
                     rooms: document.getElementById('s_rooms').value,
                     teaching_rooms: cleanTeachingRooms,
                     learning_plans: document.getElementById('s_learning_plans').value,
@@ -4193,7 +4225,15 @@
                 let startParts = (window.interactiveSettings?.start || '08:30').split(':');
                 let currentTimeMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
 
-                let ths = '<th class="border border-gray-400 p-2 bg-navy text-white w-24 text-center align-middle">วัน / คาบ</th>';
+                // ดึงค่าสีที่ตั้งไว้ (ถ้าไม่มีให้ใช้ค่าเริ่มต้น)
+                let c_th_bg = window.interactiveSettings?.color_th_bg || '#1A2942';
+                let c_th_text = window.interactiveSettings?.color_th_text || '#ffffff';
+                let c_day_bg = window.interactiveSettings?.color_day_bg || '#F3E5AB';
+                let c_day_text = window.interactiveSettings?.color_day_text || '#1A2942';
+                let c_break_bg = window.interactiveSettings?.color_break_bg || '#e5e7eb';
+                let c_break_text = window.interactiveSettings?.color_break_text || '#6b7280';
+
+                let ths = `<th class="border border-gray-400 p-2 w-24 text-center align-middle" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">วัน / คาบ</th>`;
                 for(let i=1; i<=window.interactivePeriods; i++) {
                     let isBreak = (i === breakPeriod);
                     let currentDur = isBreak ? breakDuration : periodDuration;
@@ -4202,9 +4242,9 @@
                     let endStr = Math.floor(currentTimeMin/60).toString().padStart(2,'0') + ':' + (currentTimeMin%60).toString().padStart(2,'0');
                     
                     if (isBreak) {
-                        ths += '<th class="border border-gray-400 p-2 bg-gray-500 text-white text-center w-16">พัก<br><span class="text-[10px] font-normal text-gray-200">' + startStr + ' - ' + endStr + '</span></th>';
+                        ths += `<th class="border border-gray-400 p-2 text-center w-16" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(255,255,255,0.2);">พัก<br><span class="text-[10px] font-normal opacity-80">${startStr} - ${endStr}</span></th>`;
                     } else {
-                        ths += '<th class="border border-gray-400 p-2 bg-navy text-white text-center w-32">คาบ ' + i + '<br><span class="text-[11px] font-normal text-lightgold">' + startStr + ' - ' + endStr + '</span></th>';
+                        ths += `<th class="border border-gray-400 p-2 text-center w-32" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">คาบ ${i}<br><span class="text-[11px] font-normal opacity-80">${startStr} - ${endStr}</span></th>`;
                     }
                 }
                 document.getElementById('gridThead').innerHTML = '<tr>' + ths + '</tr>';
@@ -4218,7 +4258,7 @@
                     
                     while (i <= window.interactivePeriods) {
                         if (i === breakPeriod) {
-                            tds += '<td class="border border-gray-300 bg-gray-200 text-center align-middle text-gray-500 text-xs w-16"><i class="fas fa-utensils mb-1"></i><br>พัก</td>';
+                            tds += `<td class="border border-gray-300 text-center align-middle text-xs w-16" style="background-color: ${c_break_bg}; color: ${c_break_text};"><i class="fas fa-utensils mb-1"></i><br>พัก</td>`;
                             i++;
                             continue;
                         }
@@ -4360,7 +4400,7 @@
                         
                         i += colspan;
                     }
-                    trs += '<tr><td class="border border-gray-400 p-2 font-bold text-center bg-lightgold text-navy shadow-sm align-middle">' + day + '</td>' + tds + '</tr>';
+                    trs += `<tr><td class="border border-gray-400 p-2 font-bold text-center shadow-sm align-middle" style="background-color: ${c_day_bg}; color: ${c_day_text}; border-color: rgba(0,0,0,0.1);">${day}</td>${tds}</tr>`;
                 });
 
                 document.getElementById('gridTbody').innerHTML = trs;
@@ -5586,6 +5626,14 @@
                     });
                 });
 
+                // ดึงค่าสีมาใช้ในหน้าดาวน์โหลด
+                let c_th_bg = settings.color_th_bg || '#1A2942';
+                let c_th_text = settings.color_th_text || '#ffffff';
+                let c_day_bg = settings.color_day_bg || '#F3E5AB';
+                let c_day_text = settings.color_day_text || '#1A2942';
+                let c_break_bg = settings.color_break_bg || '#e5e7eb';
+                let c_break_text = settings.color_break_text || '#6b7280';
+
                 // คำนวณเวลาและคาบพักสำหรับสร้างหัวตาราง (เหมือนกันทุกตาราง)
                 let breakPeriod = parseInt(settings.break_period || 4);
                 let breakDuration = parseInt(settings.break_duration || 60);
@@ -5603,12 +5651,12 @@
                     let endStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
                     
                     if (isBreak) {
-                         thsTemplate += `<th class="border border-navy p-2 bg-gray-300 text-gray-700 w-16 align-middle">
-                                    พัก<br><span class="text-[9px] font-normal">${startStr}-${endStr}</span>
+                         thsTemplate += `<th class="border border-navy p-2 w-16 align-middle" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(255,255,255,0.2);">
+                                    พัก<br><span class="text-[9px] font-normal opacity-80">${startStr}-${endStr}</span>
                                 </th>`;
                     } else {
-                        thsTemplate += `<th class="border border-navy p-2 bg-lightgold text-navy w-24 align-middle">
-                                    คาบ ${i}<br><span class="text-[10px] font-normal text-gray-700">${startStr}-${endStr}</span>
+                        thsTemplate += `<th class="border border-navy p-2 w-24 align-middle" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">
+                                    คาบ ${i}<br><span class="text-[10px] font-normal opacity-80">${startStr}-${endStr}</span>
                                 </th>`;
                     }
                 }
@@ -5624,7 +5672,7 @@
                         let i = 1;
                         while(i <= maxPeriod) {
                             if (i === breakPeriod) {
-                                tds += `<td class="border border-navy p-2 text-center align-middle bg-gray-100 text-gray-500 text-xs w-16">
+                                tds += `<td class="border border-navy p-2 text-center align-middle text-xs w-16" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(0,0,0,0.1);">
                                             <i class="fas fa-utensils mb-1"></i><br>พัก
                                         </td>`;
                                 i++;
@@ -5715,7 +5763,7 @@
                             
                             i += colspan;
                         }
-                        trs += `<tr><td class="border border-navy p-2 font-bold text-center bg-navy text-white w-20 align-middle">${day}</td>${tds}</tr>`;
+                        trs += `<tr><td class="border border-navy p-2 font-bold text-center w-20 align-middle" style="background-color: ${c_day_bg}; color: ${c_day_text}; border-color: rgba(0,0,0,0.2);">${day}</td>${tds}</tr>`;
                     });
 
                     // สร้างชื่อไฟล์ตามเงื่อนไข (เพื่อใช้ตอนดาวน์โหลด)
@@ -5735,7 +5783,7 @@
                             </div>
                             <table class="w-full border-collapse border-2 border-navy text-sm">
                                 <thead>
-                                    <tr><th class="border border-navy p-2 bg-navy text-white">วัน/คาบ</th>${thsTemplate}</tr>
+                                    <tr><th class="border border-navy p-2" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">วัน/คาบ</th>${thsTemplate}</tr>
                                 </thead>
                                 <tbody>${trs}</tbody>
                             </table>
