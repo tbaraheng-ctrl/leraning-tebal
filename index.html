@@ -253,6 +253,16 @@
             window.closeLocationPicker();
         };
 
+        window.showLocationConflict = (locName, reasonHtml) => {
+            Swal.fire({
+                title: `สถานที่ "${locName}" ไม่ว่าง`,
+                html: `<div class="text-left text-sm text-gray-700 mt-2 p-3 bg-red-50 border border-red-200 rounded-lg shadow-inner"><p class="font-bold text-red-600 mb-2">มีการใช้งานในเวลาดังกล่าว:</p>${reasonHtml}</div>`,
+                icon: 'info',
+                confirmButtonColor: '#1A2942',
+                confirmButtonText: 'ปิดหน้าต่าง'
+            });
+        };
+
         // ==========================================
         // INIT & UTILS
         // ==========================================
@@ -4730,13 +4740,24 @@
                 window.autoFillModalCourse(); 
                 
                 let allLocations = (window.interactiveSettings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
-                let busyLocations = new Set();
+                
+                // [แก้ไข] เปลี่ยนจากการเก็บแค่ชื่อสถานที่ เป็นเก็บสาเหตุด้วย
+                let busyLocationsInfo = {};
                 
                 window.interactiveSchData.forEach(slot => {
                     if (slot['วัน'] === day && periodChks.includes(parseInt(slot['คาบที่']))) {
                         if (existingData && slot.originalIndex === existingData.originalIndex) return;
                         let loc = String(slot['สถานที่เรียน'] || '').trim();
-                        if (loc && loc !== '-') busyLocations.add(loc);
+                        if (loc && loc !== '-') {
+                            if (!busyLocationsInfo[loc]) busyLocationsInfo[loc] = [];
+                            
+                            let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
+                            let shortTeacher = teacherName.split(',').map(name => name.trim().replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).filter(n => n).join(', ');
+                            let displayRoom = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : `ชั้น ${slot['ห้องเรียน']}`;
+                            
+                            // [แก้ไข] เพิ่มการแสดง วัน เข้าไปในข้อความแจ้งเตือน
+                            busyLocationsInfo[loc].push(`<div class="mb-1 border-b border-red-100 pb-1 last:border-0 last:pb-0 last:mb-0">- วัน${slot['วัน']} คาบ ${slot['คาบที่']}: <b>${slot['รหัสวิชา']}</b><br><span class="text-xs text-gray-500">(${displayRoom} | ครู${shortTeacher})</span></div>`);
+                        }
                     }
                 });
 
@@ -4783,12 +4804,13 @@
                         groupedLocs[gKey].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'})).forEach(loc => {
                             let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
                             
-                            // ลบ isLockMode ออก เนื่องจากหน้าจัดตารางสอนไม่มีระบบล็อค ต้องเช็คสถานะชนเสมอ
-                            if (busyLocations.has(loc) && !isEditingThisLoc) {
+                            // [แก้ไข] แสดงปุ่มไม่ว่างแบบกดดูรายละเอียดได้ พร้อมแก้บั๊กเครื่องหมายคำพูด (Quote escaping)
+                            if (busyLocationsInfo[loc] && !isEditingThisLoc) {
+                                let conflictText = busyLocationsInfo[loc].join('').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                                 gridHtml += `
-                                    <button type="button" disabled class="p-1.5 bg-red-50 border border-red-200 rounded text-red-400 font-medium cursor-not-allowed opacity-60 flex flex-col items-center justify-center min-h-[40px] shadow-sm relative overflow-hidden">
+                                    <button type="button" onclick="showLocationConflict('${loc.replace(/'/g, "\\'")}', '${conflictText}')" class="p-1.5 bg-red-50 border border-red-300 hover:bg-red-100 rounded text-red-500 font-medium cursor-pointer opacity-80 flex flex-col items-center justify-center min-h-[40px] shadow-sm relative overflow-hidden transition duration-200" title="คลิกเพื่อดูรายละเอียด">
                                         <span class="line-through z-10 text-[11px] whitespace-normal break-words w-full px-1 text-center leading-snug">${loc}</span>
-                                        <span class="text-[9px] mt-1 text-red-600 bg-red-100 px-1.5 py-0.5 rounded z-10 leading-none">ไม่ว่าง</span>
+                                        <span class="text-[9px] mt-1 text-red-700 bg-red-200 px-1.5 py-0.5 rounded z-10 leading-none shadow-sm"><i class="fas fa-info-circle mr-0.5"></i>ไม่ว่าง</span>
                                     </button>`;
                             } else {
                                 gridHtml += `
