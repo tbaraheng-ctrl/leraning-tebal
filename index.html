@@ -3014,9 +3014,6 @@
                             let newData = await getCachedData('กำหนดตารางสอน', true, true);
                             window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index})).filter(d => !isLockMode || d['ประเภท'] === 'ล็อค');
                             if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
-                            
-                            // โชว์ Pop-up เฉพาะเมื่อทำรายการจากหน้าล๊อควิชาปกติ
-                            Swal.fire({icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false});
                         }
                     }
                     window.updateSchBaseSyncStatus();
@@ -3344,9 +3341,6 @@
                             let newData = await getCachedData('กำหนดตารางสอน', true, true);
                             window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index})).filter(d => !isLockMode || d['ประเภท'] === 'ล็อค');
                             if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
-                            
-                            // โชว์ Pop-up เฉพาะเมื่อทำรายการจากหน้าล๊อควิชาปกติ
-                            Swal.fire({icon: 'success', title: 'บันทึกสำเร็จ', timer: 1500, showConfirmButton: false});
                         }
                         window.updateSchBaseSyncStatus();
                     } catch (err) {
@@ -3675,9 +3669,6 @@
                                 let newData = await getCachedData('กำหนดตารางสอน', true, true);
                                 window.scheduleBaseData = newData.map((d, index) => ({...d, originalIndex: index})).filter(d => !isLockMode || d['ประเภท'] === 'ล็อค');
                                 if (typeof window.filterSchBaseTable === 'function') { window.filterSchBaseTable(); } else { window.renderSchRows(window.scheduleBaseData); }
-                                
-                                // โชว์ Pop-up เฉพาะเมื่อทำรายการจากหน้าล๊อควิชาปกติ
-                                Swal.fire({icon: 'success', title: 'ลบสำเร็จ', text: 'ลบรายการเรียบร้อยแล้ว', timer: 1500, showConfirmButton: false});
                             }
                         }
                         window.updateSchBaseSyncStatus();
@@ -4755,8 +4746,8 @@
                             let shortTeacher = teacherName.split(',').map(name => name.trim().replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).filter(n => n).join(', ');
                             let displayRoom = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : `ชั้น ${slot['ห้องเรียน']}`;
                             
-                            // [แก้ไข] เพิ่มการแสดง วัน เข้าไปในข้อความแจ้งเตือน
-                            busyLocationsInfo[loc].push(`<div class="mb-1 border-b border-red-100 pb-1 last:border-0 last:pb-0 last:mb-0">- วัน${slot['วัน']} คาบ ${slot['คาบที่']}: <b>${slot['รหัสวิชา']}</b><br><span class="text-xs text-gray-500">(${displayRoom} | ครู${shortTeacher})</span></div>`);
+                            // [แก้ไข] เพิ่มการแสดง วัน และ ชื่อวิชา เข้าไปในข้อความแจ้งเตือน
+                            busyLocationsInfo[loc].push(`<div class="mb-1 border-b border-red-100 pb-1 last:border-0 last:pb-0 last:mb-0">- วัน${slot['วัน']} คาบ ${slot['คาบที่']}: <b>${slot['รหัสวิชา']} ${slot['ชื่อวิชา'] || ''}</b><br><span class="text-xs text-gray-500">(${displayRoom} | ครู${shortTeacher})</span></div>`);
                         }
                     }
                 });
