@@ -2250,18 +2250,46 @@
 
             window.updateLockTeacherList = () => {
                 const group = document.getElementById('t_sch_group').value;
-                const select = document.getElementById('t_sch_teacher');
-                const currentTeacher = select.value;
+                const container = document.getElementById('t_sch_teacher_container');
+                if (!container) return; // ป้องกัน Error หาก Element ยังไม่เรนเดอร์
+
+                const currentChecked = Array.from(document.querySelectorAll('.t-sch-teacher-chk:checked')).map(c => c.value);
                 
                 let filtered = teachersArr;
                 if(group !== 'all') {
                     filtered = teachersArr.filter(t => t['กลุ่มสาระการเรียนรู้'] === group);
                 }
-                select.innerHTML = '<option value="">เลือก...</option>' + 
-                    filtered.map(t => `<option value="${t['ชื่อ-สกุล']}">${t['ชื่อ-สกุล']}</option>`).join('');
                 
-                if (filtered.some(t => t['ชื่อ-สกุล'] === currentTeacher)) {
-                    select.value = currentTeacher;
+                let allChecked = filtered.length > 0 && filtered.every(t => currentChecked.includes(t['ชื่อ-สกุล']));
+
+                let html = `
+                    <label class="flex items-center space-x-2 p-1.5 bg-gray-100 hover:bg-gray-200 cursor-pointer rounded border border-gray-300 transition mb-1 sticky top-0 z-10 shadow-sm">
+                        <input type="checkbox" id="t_sch_teacher_all" class="w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="window.toggleAllTeachers(this)" ${allChecked ? 'checked' : ''}>
+                        <span class="text-sm font-bold text-navy">เลือกทั้งหมด</span>
+                    </label>
+                `;
+
+                html += filtered.map(t => `
+                    <label class="flex items-center space-x-2 p-1.5 hover:bg-gray-50 cursor-pointer rounded border border-transparent hover:border-gray-200 transition">
+                        <input type="checkbox" value="${t['ชื่อ-สกุล']}" class="t-sch-teacher-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="window.checkTeacherSelection()" ${currentChecked.includes(t['ชื่อ-สกุล']) ? 'checked' : ''}>
+                        <span class="text-sm text-gray-700">${t['ชื่อ-สกุล']}</span>
+                    </label>
+                `).join('');
+
+                container.innerHTML = html;
+            };
+
+            window.toggleAllTeachers = (source) => {
+                const checkboxes = document.querySelectorAll('.t-sch-teacher-chk');
+                checkboxes.forEach(chk => chk.checked = source.checked);
+            };
+
+            window.checkTeacherSelection = () => {
+                const selectAllChk = document.getElementById('t_sch_teacher_all');
+                const checkboxes = document.querySelectorAll('.t-sch-teacher-chk');
+                if (selectAllChk && checkboxes.length > 0) {
+                    const allChecked = Array.from(checkboxes).every(chk => chk.checked);
+                    selectAllChk.checked = allChecked;
                 }
             };
 
@@ -2292,7 +2320,7 @@
                 tabHtml = `
                     <div class="flex border-b border-gray-200 mb-4">
                         <button type="button" id="tab_lock_class" class="py-2 px-4 text-navy font-bold border-b-2 border-navy outline-none" onclick="switchLockTab('class')">ล๊อควิชาเรียน (ห้อง)</button>
-                        <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคกิจกรรม (ครู)</button>
+                        <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคภารกิจพิเศษ (ครู)</button>
                     </div>
                 `;
             }
@@ -2300,7 +2328,7 @@
             container.innerHTML = `
                 <div class="bg-white p-6 rounded-xl shadow-md overflow-x-auto relative mb-6">
                     <h3 class="text-lg font-bold text-navy flex items-center mb-4">
-                        <i class="fas ${isLockMode ? 'fa-lock text-red-500' : 'fa-calendar-plus text-green-500'} mr-2"></i>ฟอร์ม${isLockMode ? 'ล๊อครายวิชาและกิจกรรม' : 'จัดลงตาราง'}
+                        <i class="fas ${isLockMode ? 'fa-lock text-red-500' : 'fa-calendar-plus text-green-500'} mr-2"></i>ฟอร์ม${isLockMode ? 'ล๊อครายวิชาและภารกิจพิเศษ' : 'จัดลงตาราง'}
                         <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full ml-3 border border-blue-200 shadow-sm">ภาคเรียนที่ ${currentTerm}/${currentYear}</span>
                     </h3>
                     <div class="flex justify-between items-center mb-4">
@@ -2322,7 +2350,7 @@
                         <select id="filter_sch_room" class="border border-gray-300 rounded p-1.5 focus:border-gold outline-none min-w-[120px]" onchange="filterSchBaseTable()">
                             <option value="all">ทุกชั้น/ห้อง</option>
                             ${roomOptions}
-                            <option value="-">กิจกรรม (-)</option>
+                            <option value="-">ภารกิจพิเศษ (-)</option>
                         </select>
                         <input type="text" id="filter_sch_code" placeholder="ค้นหารหัส หรือ ชื่อวิชา..." class="border border-gray-300 rounded p-1.5 focus:border-gold outline-none min-w-[150px]" onkeyup="filterSchBaseTable()">
                         <select id="filter_sch_teacher" class="border border-gray-300 rounded p-1.5 focus:border-gold outline-none min-w-[150px]" onchange="filterSchBaseTable()">
@@ -2356,7 +2384,7 @@
                             ${isLockMode ? `
                             <div class="flex border-b border-gray-200 mb-6">
                                 <button type="button" id="tab_lock_class" class="py-2 px-4 text-navy font-bold border-b-2 border-navy outline-none" onclick="switchLockTab('class')">ล๊อควิชาเรียน (ห้อง)</button>
-                                <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคกิจกรรม (ครู)</button>
+                                <button type="button" id="tab_lock_teacher" class="py-2 px-4 text-gray-500 hover:text-navy outline-none" onclick="switchLockTab('teacher')">ล๊อคภารกิจพิเศษ (ครู)</button>
                             </div>
                             ` : ''}
                             
@@ -2434,7 +2462,7 @@
                                 </div>
                             </form>
 
-                            <!-- ฟอร์มที่ 2: ล๊อคกิจกรรมครู (ซ่อนไว้ก่อน) -->
+                            <!-- ฟอร์มที่ 2: ล๊อคภารกิจพิเศษ (ครู) -->
                             <form id="schTeacherForm" class="flex-col gap-4 text-sm hidden" onsubmit="event.preventDefault();">
                                 <input type="hidden" id="t_sch_id">
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
@@ -2460,21 +2488,29 @@
                                         </select>
                                     </div>
                                     <div>
-                                        <label class="block text-gray-700 font-medium mb-1">ชื่อครู</label>
-                                        <select id="t_sch_teacher" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
-                                            <option value="">เลือก...</option>
-                                            ${teacherOptsHtml}
-                                        </select>
+                                        <label class="block text-gray-700 font-medium mb-1">ชื่อครู <span class="text-xs text-gray-500 font-normal">(ติ๊กเลือกได้หลายคน)</span></label>
+                                        <div id="t_sch_teacher_container" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none bg-white max-h-32 overflow-y-auto flex flex-col gap-1 relative">
+                                            <label class="flex items-center space-x-2 p-1.5 bg-gray-100 hover:bg-gray-200 cursor-pointer rounded border border-gray-300 transition mb-1 sticky top-0 z-10 shadow-sm">
+                                                <input type="checkbox" id="t_sch_teacher_all" class="w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="window.toggleAllTeachers(this)">
+                                                <span class="text-sm font-bold text-navy">เลือกทั้งหมด</span>
+                                            </label>
+                                            ${teachersArr.map(t => `
+                                                <label class="flex items-center space-x-2 p-1.5 hover:bg-gray-50 cursor-pointer rounded border border-transparent hover:border-gray-200 transition">
+                                                    <input type="checkbox" value="${t['ชื่อ-สกุล']}" class="t-sch-teacher-chk w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="window.checkTeacherSelection()">
+                                                    <span class="text-sm text-gray-700">${t['ชื่อ-สกุล']}</span>
+                                                </label>
+                                            `).join('')}
+                                        </div>
                                     </div>
                                     <div>
-                                        <label class="block text-gray-700 font-medium mb-1">กิจกรรม</label>
-                                        <input type="text" id="t_sch_activity" required list="dl_activities" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์กิจกรรม...">
+                                        <label class="block text-gray-700 font-medium mb-1">ภารกิจพิเศษ</label>
+                                        <input type="text" id="t_sch_activity" required list="dl_activities" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" placeholder="เลือกหรือพิมพ์ภารกิจพิเศษ...">
                                         <datalist id="dl_activities">${activityOptionsHtml}</datalist>
                                     </div>
                                 </div>
                                 
                                 <div class="bg-gray-50 p-4 rounded border border-gray-200 mt-2">
-                                    <label class="block font-medium mb-2">ระบุชั้น/ห้องที่เกี่ยวข้อง <span class="text-xs text-gray-500 font-normal">(ไม่บังคับ - ใช้ในกรณีที่กิจกรรมนี้ดึงนักเรียนไปร่วมด้วย)</span></label>
+                                    <label class="block font-medium mb-2">ระบุชั้น/ห้องที่เกี่ยวข้อง <span class="text-xs text-gray-500 font-normal">(ไม่บังคับ - ใช้ในกรณีที่ภารกิจนี้ดึงนักเรียนไปร่วมด้วย)</span></label>
                                     <div class="flex flex-col gap-3">
                                         <div class="flex flex-wrap gap-2 items-center p-2 bg-white border border-gray-300 rounded">
                                             <span class="text-sm font-medium text-gray-600 mr-1">ระดับชั้น:</span>
@@ -2511,7 +2547,7 @@
                                 <div class="overflow-x-auto max-h-48 border border-gray-200 rounded">
                                     <table class="w-full text-xs text-left border-collapse">
                                         <thead class="bg-gray-100 text-gray-700 sticky top-0">
-                                            <tr><th class="p-2 border-b">วัน</th><th class="p-2 border-b">คาบ</th><th class="p-2 border-b">ชั้น/ห้อง</th><th class="p-2 border-b">วิชา/กิจกรรม</th><th class="p-2 border-b">ครูผู้สอน</th><th class="p-2 border-b text-center">จัดการ</th></tr>
+                                            <tr><th class="p-2 border-b">วัน</th><th class="p-2 border-b">คาบ</th><th class="p-2 border-b">ชั้น/ห้อง</th><th class="p-2 border-b">วิชา/ภารกิจพิเศษ</th><th class="p-2 border-b">ครูผู้สอน</th><th class="p-2 border-b text-center">จัดการ</th></tr>
                                         </thead>
                                         <tbody id="schTempTbody">
                                             <tr><td colspan="6" class="p-4 text-center text-gray-400 italic">ยังไม่มีรายการ กรอกข้อมูลด้านบนแล้วกด "เพิ่มลงรายการด้านล่าง"</td></tr>
@@ -2527,7 +2563,7 @@
                                 <div class="ml-auto flex space-x-2">
                         <button type="button" onclick="closeSchBaseModal()" class="bg-gray-200 text-gray-800 px-6 py-2 rounded hover:bg-gray-300 transition">ปิดหน้าต่าง</button>
                         <button type="button" id="sch_btn_save_edit" onclick="saveEditedSch('class')" class="bg-gold text-navy font-bold px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md hidden">บันทึกการแก้ไขวิชา</button>
-                        <button type="button" id="t_sch_btn_save_edit" onclick="saveEditedSch('teacher')" class="bg-gold text-navy font-bold px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md hidden">บันทึกการแก้ไขกิจกรรม</button>
+                        <button type="button" id="t_sch_btn_save_edit" onclick="saveEditedSch('teacher')" class="bg-gold text-navy font-bold px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md hidden">บันทึกการแก้ไขภารกิจพิเศษ</button>
                         <button type="button" id="sch_btn_save_batch" onclick="saveBatchSch()" class="bg-navy text-white px-8 py-2 rounded hover:bg-opacity-90 transition shadow-md">บันทึกข้อมูลเข้าสู่ระบบ</button>
                     </div>
                 </div>
@@ -2867,11 +2903,12 @@
                     return;
                 }
                 tbody.innerHTML = data.map((d) => {
-                    let isActivity = d['รหัสวิชา'] === 'กิจกรรม' || d['ห้องเรียน'] === '-';
+                    let isActivity = d['รหัสวิชา'] === 'กิจกรรม' || d['รหัสวิชา'] === 'ภารกิจพิเศษ' || d['ห้องเรียน'] === '-';
                     let trClass = d.isPending ? 'opacity-60 bg-gray-50' : (isActivity ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-gray-50');
+                    let displayRoom = d['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : d['ห้องเรียน'];
                     return `
                     <tr class="border-b ${trClass}">
-                        <td class="p-2 border text-center">${d['ห้องเรียน']}</td><td class="p-2 border text-center">${d['แผนการเรียน'] || '-'}</td><td class="p-2 border text-center">${d['วัน']}</td>
+                        <td class="p-2 border text-center">${displayRoom}</td><td class="p-2 border text-center">${d['แผนการเรียน'] || '-'}</td><td class="p-2 border text-center">${d['วัน']}</td>
                         <td class="p-2 border text-center">${d['คาบที่']}</td>
                         <td class="p-2 border font-bold ${isActivity ? 'text-purple-700' : ''}">${d['รหัสวิชา']}</td>
                         <td class="p-2 border ${isActivity ? 'text-purple-700 font-semibold' : ''}">${d['ชื่อวิชา']}</td>
@@ -3041,7 +3078,7 @@
                     <tr class="border-b bg-white hover:bg-gray-50">
                         <td class="p-2 border-b text-center">${s['วัน']}</td>
                         <td class="p-2 border-b text-center">${s['คาบที่']}</td>
-                        <td class="p-2 border-b text-center">${s['ห้องเรียน'] === '-' ? 'กิจกรรม' : s['ห้องเรียน']}</td>
+                        <td class="p-2 border-b text-center">${s['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : s['ห้องเรียน']}</td>
                         <td class="p-2 border-b font-semibold text-navy">${s['รหัสวิชา']} - ${s['ชื่อวิชา']}</td>
                         <td class="p-2 border-b">${s['ชื่อครูผู้สอน']}</td>
                         <td class="p-2 border-b text-center">
@@ -3124,8 +3161,8 @@
 
                                         if (teacher !== '' && sTeacher === teacher) {
                                             let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
-                                            if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
-                                                conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                            if (slot['รหัสวิชา'] === 'กิจกรรม' || slot['รหัสวิชา'] === 'ภารกิจพิเศษ' || sRoom === '-') {
+                                                conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจพิเศษ "${slot['ชื่อวิชา']}"`);
                                             } else {
                                                 conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
                                             }
@@ -3149,7 +3186,7 @@
                     actVal = document.getElementById('t_sch_activity') ? document.getElementById('t_sch_activity').value.trim() : '';
                     dayChks = Array.from(document.querySelectorAll('.t-sch-day-chk:checked')).map(c => c.value);
                     periodChks = Array.from(document.querySelectorAll('.t-sch-period-chk:checked')).map(c => parseInt(c.value));
-                    teacher = document.getElementById('t_sch_teacher') ? document.getElementById('t_sch_teacher').value : '';
+                    teacher = Array.from(document.querySelectorAll('.t-sch-teacher-chk:checked')).map(c => c.value).join(', ');
                     
                     let tGradeChks = document.querySelectorAll('.t-sch-grade-chk:checked');
                     let tRoomChks = document.querySelectorAll('.t-sch-room-chk:checked');
@@ -3164,7 +3201,7 @@
                     if (dayChks.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกวันอย่างน้อย 1 วัน', 'warning');
                     if (periodChks.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณาติ๊กเลือกคาบเรียนอย่างน้อย 1 คาบ', 'warning');
                     if (!teacher) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกครูผู้สอน', 'warning');
-                    if (!actVal) return Swal.fire('แจ้งเตือน', 'กรุณาระบุกิจกรรม', 'warning');
+                    if (!actVal) return Swal.fire('แจ้งเตือน', 'กรุณาระบุภารกิจพิเศษ', 'warning');
 
                     dayChks.forEach(d => {
                         periodChks.forEach(p => {
@@ -3175,8 +3212,8 @@
 
                                     if (teacher !== '' && sTeacher === teacher) {
                                         let shortTeacher = teacher.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').split(' ')[0];
-                                        if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
-                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                        if (slot['รหัสวิชา'] === 'กิจกรรม' || slot['รหัสวิชา'] === 'ภารกิจพิเศษ' || sRoom === '-') {
+                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจพิเศษ "${slot['ชื่อวิชา']}"`);
                                         } else {
                                             conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
                                         }
@@ -3204,7 +3241,7 @@
                 }
 
                 // แยก รหัส และ ชื่อวิชา เพื่อบันทึกลงฐานข้อมูลให้ถูกต้อง
-                let saveCode = 'กิจกรรม';
+                let saveCode = 'ภารกิจพิเศษ';
                 let saveName = actVal;
                 if (type === 'teacher' && actVal && actVal.includes(' - ')) {
                     let parts = actVal.split(' - ');
@@ -3277,7 +3314,7 @@
 
                 window.tempSchList.forEach(data => {
                     if (data['สถานที่เรียน'] && data['สถานที่เรียน'] !== '-') newLocations.add(data['สถานที่เรียน']);
-                    if (data['รหัสวิชา'] === 'กิจกรรม') newActivities.add(data['ชื่อวิชา']);
+                    if (data['รหัสวิชา'] === 'กิจกรรม' || data['รหัสวิชา'] === 'ภารกิจพิเศษ') newActivities.add(data['ชื่อวิชา']);
                 });
 
                 let currentRooms = (settings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
@@ -3459,7 +3496,7 @@
                     actVal = document.getElementById('t_sch_activity').value.trim();
                     dayChks = Array.from(document.querySelectorAll('.t-sch-day-chk:checked')).map(c => c.value);
                     periodChks = Array.from(document.querySelectorAll('.t-sch-period-chk:checked')).map(c => parseInt(c.value));
-                    teacher = document.getElementById('t_sch_teacher').value;
+                    teacher = Array.from(document.querySelectorAll('.t-sch-teacher-chk:checked')).map(c => c.value).join(', ');
                     
                     let tGradeChks = document.querySelectorAll('.t-sch-grade-chk:checked');
                     let tRoomChks = document.querySelectorAll('.t-sch-room-chk:checked');
@@ -3489,8 +3526,8 @@
 
                                     if (hasCommonTeacher) {
                                         let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
-                                        if (slot['รหัสวิชา'] === 'กิจกรรม' || sRoom === '-') {
-                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                        if (slot['รหัสวิชา'] === 'กิจกรรม' || slot['รหัสวิชา'] === 'ภารกิจพิเศษ' || sRoom === '-') {
+                                            conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจพิเศษ "${slot['ชื่อวิชา']}"`);
                                         } else {
                                             conflictMsg.push(`- วัน${d} คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
                                         }
@@ -3523,7 +3560,7 @@
 
                 window.closeSchBaseModal(); 
                 
-                let saveCode = 'กิจกรรม';
+                let saveCode = 'ภารกิจพิเศษ';
                 let saveName = actVal;
                 if (type === 'teacher' && actVal && actVal.includes(' - ')) {
                     let parts = actVal.split(' - ');
@@ -3694,7 +3731,7 @@
                 document.getElementById('sch_temp_table_container').classList.add('hidden');
                 document.getElementById('sch_btn_save_batch').classList.add('hidden');
                 
-                if (data['รหัสวิชา'] === 'กิจกรรม' || data['ห้องเรียน'] === '-') {
+                if (data['รหัสวิชา'] === 'กิจกรรม' || data['รหัสวิชา'] === 'ภารกิจพิเศษ' || data['ห้องเรียน'] === '-') {
                     if(isLockMode) {
                         window.switchLockTab('teacher');
                         document.getElementById('tab_lock_class').classList.add('hidden');
@@ -3718,9 +3755,16 @@
                         document.getElementById('t_sch_group').value = 'all';
                     }
                     window.updateLockTeacherList();
-                    document.getElementById('t_sch_teacher').value = teacherName;
+                    
+                    // [แก้ไข] กระจายชื่อครูลงใน Checkbox หากเป็นการล๊อคแบบหลายคน
+                    let teacherArr = teacherName.split(',').map(t => t.trim());
+                    document.querySelectorAll('.t-sch-teacher-chk').forEach(chk => {
+                        chk.checked = teacherArr.includes(chk.value);
+                    });
+                    if (typeof window.checkTeacherSelection === 'function') window.checkTeacherSelection();
+                    if (typeof window.updateTeacherDisplay === 'function') window.updateTeacherDisplay();
 
-                    if (data['รหัสวิชา'] !== 'กิจกรรม') {
+                    if (data['รหัสวิชา'] !== 'กิจกรรม' && data['รหัสวิชา'] !== 'ภารกิจพิเศษ') {
                         document.getElementById('t_sch_activity').value = `${data['รหัสวิชา']} - ${data['ชื่อวิชา']}`;
                     } else {
                         document.getElementById('t_sch_activity').value = data['ชื่อวิชา'] || '';
@@ -3814,6 +3858,9 @@
                 window.baseLocationHtml = '';
                 document.getElementById('t_sch_group').value = 'all';
                 window.updateLockTeacherList();
+                
+                document.querySelectorAll('.t-sch-teacher-chk').forEach(c => c.checked = false);
+                if (typeof window.updateTeacherDisplay === 'function') window.updateTeacherDisplay();
 
                 document.getElementById('sch_batch_add_controls').classList.remove('hidden');
                 document.getElementById('t_sch_batch_add_controls').classList.remove('hidden');
@@ -4308,9 +4355,9 @@
                                     displaySub = cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
                                 } else {
                                     if (firstSlot.allRooms && firstSlot.allRooms.length > 0) {
-                                        displaySub = firstSlot.allRooms.includes('-') ? 'กิจกรรม' : 'ชั้น ' + firstSlot.allRooms.join(', ');
+                                        displaySub = firstSlot.allRooms.includes('-') ? 'ภารกิจพิเศษ' : 'ชั้น ' + firstSlot.allRooms.join(', ');
                                     } else {
-                                        displaySub = firstSlot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + firstSlot['ห้องเรียน'];
+                                        displaySub = firstSlot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : 'ชั้น ' + firstSlot['ห้องเรียน'];
                                     }
                                 }
 
@@ -4336,9 +4383,9 @@
                                         }).filter(n => n).join(', ');
                                     } else {
                                         if (slot.allRooms && slot.allRooms.length > 0) {
-                                            displaySub = slot.allRooms.includes('-') ? 'กิจกรรม' : 'ชั้น ' + slot.allRooms.join(', ');
+                                            displaySub = slot.allRooms.includes('-') ? 'ภารกิจพิเศษ' : 'ชั้น ' + slot.allRooms.join(', ');
                                         } else {
-                                            displaySub = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : 'ชั้น ' + slot['ห้องเรียน'];
+                                            displaySub = slot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : 'ชั้น ' + slot['ห้องเรียน'];
                                         }
                                     }
 
@@ -4744,7 +4791,7 @@
                             
                             let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
                             let shortTeacher = teacherName.split(',').map(name => name.trim().replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).filter(n => n).join(', ');
-                            let displayRoom = slot['ห้องเรียน'] === '-' ? 'กิจกรรม' : `ชั้น ${slot['ห้องเรียน']}`;
+                            let displayRoom = slot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : `ชั้น ${slot['ห้องเรียน']}`;
                             
                             // [แก้ไข] เพิ่มการแสดง วัน และ ชื่อวิชา เข้าไปในข้อความแจ้งเตือน
                             busyLocationsInfo[loc].push(`<div class="mb-1 border-b border-red-100 pb-1 last:border-0 last:pb-0 last:mb-0">- วัน${slot['วัน']} คาบ ${slot['คาบที่']}: <b>${slot['รหัสวิชา']} ${slot['ชื่อวิชา'] || ''}</b><br><span class="text-xs text-gray-500">(${displayRoom} | ครู${shortTeacher})</span></div>`);
@@ -4888,7 +4935,11 @@
                                 }
                             } else {
                                 let teacher = document.getElementById('grid_t_name').value;
-                                if (teacher) document.getElementById('t_sch_teacher').value = teacher;
+                                if (teacher) {
+                                    let chk = document.querySelector(`.t-sch-teacher-chk[value="${teacher}"]`);
+                                    if (chk) chk.checked = true;
+                                    if(typeof window.updateTeacherDisplay === 'function') window.updateTeacherDisplay();
+                                }
                             }
                             if(typeof window.updateMainFormDropdowns === 'function') window.updateMainFormDropdowns();
                         }, 300);
@@ -5252,8 +5303,8 @@
 
                             if (hasCommonTeacher) {
                                 let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
-                                if (String(slot['รหัสวิชา'] || '').trim() === 'กิจกรรม' || sRoom === '-') {
-                                    conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจ "${slot['ชื่อวิชา']}"`);
+                                if (String(slot['รหัสวิชา'] || '').trim() === 'กิจกรรม' || String(slot['รหัสวิชา'] || '').trim() === 'ภารกิจพิเศษ' || sRoom === '-') {
+                                    conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจพิเศษ "${slot['ชื่อวิชา']}"`);
                                 } else {
                                     conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
                                 }
@@ -5757,10 +5808,11 @@
                                         
                                         if(settings.show_room && type === 'teacher') {
                                             if (slot.allRooms && slot.allRooms.length > 0) {
-                                                let rText = slot.allRooms.includes('-') ? 'กิจกรรม' : slot.allRooms.join(', ');
+                                                let rText = slot.allRooms.includes('-') ? 'ภารกิจพิเศษ' : slot.allRooms.join(', ');
                                                 innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${rText}</span></div>`;
                                             } else {
-                                                innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${slot['ห้องเรียน']}</span></div>`;
+                                                let displayR = slot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : slot['ห้องเรียน'];
+                                                innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${displayR}</span></div>`;
                                             }
                                         }
                                         
@@ -6194,7 +6246,7 @@
                         // [แก้ไข] ยกเว้น แนะแนว, PLC กลุ่มสาระ, PLC กลุ่มบริหาร ให้นำไปแสดงในคำสั่งสอน
                         let isAllowedActivity = sName.includes('แนะแนว') || sName.includes('PLC กลุ่มสาระ') || sName.includes('PLC กลุ่มบริหาร');
                         
-                        if (((sType === 'ล็อค' && sPlan === '-') || sCode === 'กิจกรรม') && !isAllowedActivity) {
+                        if (((sType === 'ล็อค' && sPlan === '-') || sCode === 'กิจกรรม' || sCode === 'ภารกิจพิเศษ') && !isAllowedActivity) {
                             return; 
                         }
                         
