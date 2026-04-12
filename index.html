@@ -3114,22 +3114,49 @@
                 window.renderTempSchTable();
             };
 
+            window.saveBatchSch = async () => {
+                if (window.tempSchList.length === 0) {
+                    return Swal.fire('แจ้งเตือน', 'ไม่มีรายการให้บันทึก กรุณาเพิ่มข้อมูลลงตารางด้านล่างก่อน', 'warning');
+                }
+                
+                window.closeSchBaseModal();
+                
+                let hasError = false;
+                for (let dataObj of window.tempSchList) {
+                    if (hasError) break;
+                    try {
+                        await processSaveDataAsync(dataObj, null);
+                    } catch (err) {
+                        hasError = true;
+                    }
+                }
+                
+                window.tempSchList = []; 
+            };
+
+            window.saveEditedSch = async (type) => {
+                await window.processSchForm(type, true);
+            };
+
             window.addSchToTemp = async (type) => {
+                await window.processSchForm(type, false);
+            };
+
+            window.processSchForm = async (type, isEdit) => {
                 let dayChks, periodChks, locationVal, code, teacher, name, actVal;
-                let roomPlanPairs = []; // <--- ย้ายตัวแปรมาประกาศไว้ตรงนี้ เพื่อให้อยู่ใน Scope ตลอดฟังก์ชัน
-                let actRooms = []; // <--- เพิ่มตัวแปร actRooms ให้อยู่ใน Scope ตลอดฟังก์ชัน
+                let roomPlanPairs = []; 
+                let actRooms = []; 
+                let rowIdStr = type === 'class' ? document.getElementById('sch_id').value : document.getElementById('t_sch_id').value;
+                let rowId = rowIdStr !== "" ? rowIdStr : null;
 
                 let conflictMsg = [];
-                let allDataToCheck = window.scheduleBaseData.concat(window.tempSchList);
+                let allDataToCheck = isEdit ? window.scheduleBaseData : window.scheduleBaseData.concat(window.tempSchList);
 
                 if (type === 'class') {
-                    rowIdStr = document.getElementById('sch_id').value;
-                    rowId = rowIdStr !== "" ? rowIdStr : null;
                     dayChks = Array.from(document.querySelectorAll('.sch-day-chk:checked')).map(c => c.value);
                     periodChks = Array.from(document.querySelectorAll('.sch-period-chk:checked')).map(c => parseInt(c.value));
                     locationVal = document.getElementById('sch_location').value.trim();
                     
-                    let roomPlanPairs = [];
                     document.querySelectorAll('#sch_room_plan_container .room-plan-pair').forEach(row => {
                         let r = row.querySelector('.rp-room').value.trim();
                         let p = row.querySelector('.rp-plan').value;
@@ -3149,9 +3176,9 @@
                     if (!isLockMode) {
                         roomPlanPairs.forEach(pair => {
                             let currentCourseCount = 0;
-                            for (let i = 0; i < window.scheduleBaseData.length; i++) {
-                                let s = window.scheduleBaseData[i];
-                                if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
+                            for (let i = 0; i < allDataToCheck.length; i++) {
+                                let s = allDataToCheck[i];
+                                if (isEdit && rowId !== null && String(s.originalIndex) === String(rowId)) continue;
                                 if (s['ห้องเรียน'] === pair.room && s['แผนการเรียน'] === pair.plan && s['รหัสวิชา'] === code) {
                                     currentCourseCount++;
                                 }
@@ -3172,8 +3199,8 @@
 
                         dayChks.forEach(d => {
                             periodChks.forEach(p => {
-                                window.scheduleBaseData.forEach(slot => {
-                                    if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
+                                allDataToCheck.forEach(slot => {
+                                    if (isEdit && rowId !== null && String(slot.originalIndex) === String(rowId)) return;
 
                                     if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
                                         let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
@@ -3217,8 +3244,6 @@
                     }
 
                 } else {
-                    rowIdStr = document.getElementById('t_sch_id').value;
-                    rowId = rowIdStr !== "" ? rowIdStr : null;
                     actVal = document.getElementById('t_sch_activity').value.trim();
                     dayChks = Array.from(document.querySelectorAll('.t-sch-day-chk:checked')).map(c => c.value);
                     periodChks = Array.from(document.querySelectorAll('.t-sch-period-chk:checked')).map(c => parseInt(c.value));
@@ -3226,7 +3251,6 @@
                     
                     let tGradeChks = document.querySelectorAll('.t-sch-grade-chk:checked');
                     let tRoomChks = document.querySelectorAll('.t-sch-room-chk:checked');
-                    let actRooms = [];
                     if(tGradeChks.length > 0 && tRoomChks.length > 0) {
                         tGradeChks.forEach(g => {
                             tRoomChks.forEach(r => actRooms.push(`ม.${g.value}/${r.value}`));
@@ -3239,8 +3263,8 @@
 
                     dayChks.forEach(d => {
                         periodChks.forEach(p => {
-                            window.scheduleBaseData.forEach(slot => {
-                                if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
+                            allDataToCheck.forEach(slot => {
+                                if (isEdit && rowId !== null && String(slot.originalIndex) === String(rowId)) return;
 
                                 if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
                                     let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
@@ -3274,18 +3298,19 @@
                 }
 
                 if (conflictMsg.length > 0) {
-                    Swal.fire({
+                    let confirmSave = await Swal.fire({
                         title: 'พบข้อมูลชนกัน!',
-                        html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2">' + conflictMsg.join('<br>') + '</div>',
-                        icon: 'error',
-                        confirmButtonColor: '#1A2942',
-                        confirmButtonText: 'กลับไปแก้ไข'
+                        html: '<div class="text-left text-sm mt-2 text-red-600 space-y-2"><b>ระบบตรวจพบการซ้ำซ้อน:</b><br>' + conflictMsg.join('<br>') + '</div>',
+                        icon: 'warning',
+                        showCancelButton: true,
+                        confirmButtonColor: '#d33',
+                        cancelButtonColor: '#3085d6',
+                        confirmButtonText: 'บันทึกต่อไป (ข้ามเงื่อนไข)',
+                        cancelButtonText: 'กลับไปแก้ไข'
                     });
-                    return; 
+                    if (!confirmSave.isConfirmed) return; 
                 }
 
-                window.closeSchBaseModal(); 
-                
                 let saveCode = 'ภารกิจพิเศษ';
                 let saveName = actVal;
                 if (type === 'teacher' && actVal && actVal.includes(' - ')) {
@@ -3294,7 +3319,8 @@
                     saveName = parts.slice(1).join(' - ').trim();
                 }
 
-                (async () => {
+                if (isEdit) {
+                    window.closeSchBaseModal(); 
                     let tempIdx = 0;
                     let hasError = false;
                     for (const d of dayChks) {
@@ -3302,13 +3328,6 @@
                             if (hasError) break; 
                             
                             if (type === 'class') {
-                                let roomPlanPairs = [];
-                                document.querySelectorAll('#sch_room_plan_container .room-plan-pair').forEach(row => {
-                                    let r = row.querySelector('.rp-room').value.trim();
-                                    let p = row.querySelector('.rp-plan').value;
-                                    if(r) roomPlanPairs.push({room: r, plan: p});
-                                });
-
                                 for (const pair of roomPlanPairs) {
                                     if (hasError) break;
                                     let dataObj = {
@@ -3328,16 +3347,6 @@
                                     }
                                 }
                             } else {
-                                let actRooms = [];
-                                let tGradeChks = document.querySelectorAll('.t-sch-grade-chk:checked');
-                                let tRoomChks = document.querySelectorAll('.t-sch-room-chk:checked');
-                                if(tGradeChks.length > 0 && tRoomChks.length > 0) {
-                                    tGradeChks.forEach(g => {
-                                        tRoomChks.forEach(r => actRooms.push(`ม.${g.value}/${r.value}`));
-                                    });
-                                }
-                                if(actRooms.length === 0) actRooms = ['-'];
-
                                 for (const ar of actRooms) {
                                     if (hasError) break;
                                     let dataObj = {
@@ -3359,7 +3368,49 @@
                             }
                         }
                     }
-                })();
+                } else {
+                    for (const d of dayChks) {
+                        for (const p of periodChks) {
+                            if (type === 'class') {
+                                roomPlanPairs.forEach(pair => {
+                                    window.tempSchList.push({
+                                        'ห้องเรียน': pair.room, 'แผนการเรียน': pair.plan,
+                                        'วัน': d, 'คาบที่': p,
+                                        'รหัสวิชา': code, 'ชื่อวิชา': name,
+                                        'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': locationVal,
+                                        'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
+                                        'ผู้บันทึก': currentUser
+                                    });
+                                });
+                            } else {
+                                actRooms.forEach(ar => {
+                                    window.tempSchList.push({
+                                        'ห้องเรียน': ar, 'แผนการเรียน': '-',
+                                        'วัน': d, 'คาบที่': p,
+                                        'รหัสวิชา': saveCode, 'ชื่อวิชา': saveName,
+                                        'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': '-',
+                                        'ประเภท': isLockMode ? 'ล็อค' : 'ปกติ',
+                                        'ผู้บันทึก': currentUser
+                                    });
+                                });
+                            }
+                        }
+                    }
+                    
+                    window.renderTempSchTable();
+
+                    document.querySelectorAll('.sch-day-chk, .t-sch-day-chk').forEach(c => c.checked = false);
+                    document.querySelectorAll('.sch-period-chk, .t-sch-period-chk').forEach(c => c.checked = false);
+                    if (type === 'class') {
+                        document.getElementById('sch_code').value = '';
+                        document.getElementById('sch_name').value = '';
+                        document.getElementById('sch_location').value = '';
+                        document.getElementById('sch_code').focus();
+                    } else {
+                        document.getElementById('t_sch_activity').value = '';
+                    }
+                    window.updateMainFormDropdowns();
+                }
             };
 
             window.deleteFromModal = (formType) => {
@@ -3933,39 +3984,16 @@
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                 <div>
                                     <label class="block mb-1 font-medium">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะวิชาที่เหลือและครูว่าง</span></label>
-                                    <input type="text" id="m_code" list="dl_m_code" required autocomplete="off" class="w-full border rounded p-2 focus:border-gold outline-none" onchange="autoFillModalCourse()" oninput="autoFillModalCourse()" placeholder="พิมพ์หรือเลือกรหัสวิชา...">
+                                    <input type="text" id="m_code" list="dl_m_code" required autocomplete="off" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="autoFillModalCourse()" oninput="autoFillModalCourse()" placeholder="พิมพ์หรือเลือกรหัสวิชา...">
                                     <datalist id="dl_m_code"></datalist>
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">ชื่อวิชา</label>
-                                    <input type="text" id="m_name" class="w-full border rounded p-2 focus:border-gold outline-none">
+                                    <input type="text" id="m_name" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">ครูผู้สอน</label>
-                                    <input type="text" id="m_teacher" class="w-full border rounded p-2 focus:border-gold outline-none">
-                                </div>
-                                <div>
-                                    <label class="block mb-1 font-medium text-sm">แผนการเรียน <span class="text-xs text-red-500 ml-1">*</span></label>
-                                    <select id="m_plan" class="w-full border rounded p-2 focus:border-gold outline-none text-sm" onchange="window.updateModalDropdowns(window.currentEditingData)">
-                                        <option value="">-- เลือกแผนการเรียน --</option>
-                                        ${planOptions}
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
-                                <div>
-                                    <label class="block mb-1 font-medium">รหัสวิชา <span class="text-xs text-red-500 font-normal ml-1">*แสดงเฉพาะวิชาที่เหลือและครูว่าง</span></label>
-                                    <input type="text" id="m_code" list="dl_m_code" required autocomplete="off" class="w-full border rounded p-2 focus:border-gold outline-none" onchange="autoFillModalCourse()" oninput="autoFillModalCourse()" placeholder="พิมพ์หรือเลือกรหัสวิชา...">
-                                    <datalist id="dl_m_code"></datalist>
-                                </div>
-                                <div>
-                                    <label class="block mb-1 font-medium">ชื่อวิชา</label>
-                                    <input type="text" id="m_name" readonly class="w-full border rounded p-2 bg-gray-50 text-gray-600 cursor-not-allowed">
-                                </div>
-                                <div>
-                                    <label class="block mb-1 font-medium">ครูผู้สอน</label>
-                                    <input type="text" id="m_teacher" readonly class="w-full border rounded p-2 bg-gray-50 text-gray-600 cursor-not-allowed">
+                                    <input type="text" id="m_teacher" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none">
                                 </div>
                                 <div>
                                     <label class="block mb-1 font-medium">สถานที่เรียน <span class="text-xs text-red-500 font-normal ml-1">*คลิกเพื่อเลือก</span></label>
