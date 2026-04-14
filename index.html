@@ -517,7 +517,7 @@
             'create_table': { title: 'จัดทำตารางสอน', icon: 'fa-calendar-plus', roles: ['admin', 'head', 'user'], render: renderCreateTable },
             'process': { title: 'ประมวลผลตารางสอน', icon: 'fa-microchip', roles: ['admin'], render: renderProcess },
             'download': { title: 'ดาวน์โหลดตารางสอน', icon: 'fa-download', roles: ['admin', 'head', 'user'], render: renderDownload },
-            'orders': { title: 'ประมวลคำสั่งสอน', icon: 'fa-file-signature', roles: ['admin'], render: renderOrders }
+            'orders': { title: 'คำสั่งภาระงานสอน', icon: 'fa-file-signature', roles: ['admin', 'head', 'user'], render: renderOrders }
         };
 
         async function buildMenu() {
@@ -3750,6 +3750,7 @@
             window.interactiveViewMode = 'student'; 
 
             window.autoSyncInterval = setInterval(() => {
+                if (window.isPauseGridRefresh) return; // เพิ่มบรรทัดนี้: หยุดรีเฟรชชั่วคราวขณะกำลังบันทึกข้อมูล
                 const activeEl = document.activeElement;
                 const isTypingOrSelecting = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'SELECT' || activeEl.tagName === 'TEXTAREA');
                 const schModalEl = document.getElementById('schModal');
@@ -4682,8 +4683,18 @@
                                     if (window.interactiveViewMode === 'student') {
                                         let teacherName = String(slot['ชื่อครูผู้สอน'] || '');
                                         displaySub = teacherName.split(',').map(name => {
-                                            let cleanName = name.trim().replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                            return cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                            let rawName = name.trim();
+                                            let cleanName = rawName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
+                                            if (!cleanName) return '';
+                                            let shortName = cleanName.split(' ')[0];
+                                            let tInfo = teachersArr.find(t => String(t['ชื่อ-สกุล']).replace(/\s+/g, '') === rawName.replace(/\s+/g, ''));
+                                            if (tInfo) {
+                                                let group = String(tInfo['กลุ่มสาระการเรียนรู้'] || '');
+                                                let role = String(tInfo['บทบาท'] || '');
+                                                if ((group.includes('ผู้อำนวยการ') && !group.includes('รอง')) || (role.includes('ผู้อำนวยการ') && !role.includes('รอง'))) return 'ผอ.' + shortName;
+                                                if (group.includes('รองผู้อำนวยการ') || role.includes('รองผู้อำนวยการ')) return 'รอง' + shortName;
+                                            }
+                                            return 'ครู' + shortName;
                                         }).filter(n => n).join(', ');
                                     } else {
                                         if (slot.allRooms && slot.allRooms.length > 0) {
@@ -5497,11 +5508,14 @@
             };
 
             const processSaveDataAsync = async (data, rowId) => {
+                window.isPauseGridRefresh = true; // ระงับการรีเฟรชตารางอัตโนมัติจากเบื้องหลัง
+
                 let oldItem = null;
                 if (rowId !== null) {
                     let index = window.interactiveSchData.findIndex(item => String(item.originalIndex) === String(rowId));
                     if(index !== -1) {
                         oldItem = { ...window.interactiveSchData[index] };
+                        // แสดงข้อมูลที่แก้ไขใหม่ลงในหน้าจอทันที พร้อมไอคอนหมุน
                         window.interactiveSchData[index] = { ...data, originalIndex: rowId, isPending: true };
                     }
                 } else {
@@ -5523,6 +5537,7 @@
                 }
 
                 try {
+                    // ส่งข้อมูลเก่าไปเทียบเพื่ออัปเดตทับบรรทัดเดิมโดยสมบูรณ์
                     await callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data, rowData: cleanOldItem }, true);
                     
                     window.pendingSyncCount--;
@@ -5532,9 +5547,11 @@
                         if (window.interactiveViewMode === 'list') window.filterInteractiveSchList(); else window.refreshSchGrid();
                     }
                     window.updateSyncStatus();
+                    window.isPauseGridRefresh = false; // ปลดล็อกให้ระบบรีเฟรชอัตโนมัติกลับมาทำงานต่อ
                 } catch(err) {
                     window.pendingSyncCount--;
                     window.updateSyncStatus();
+                    window.isPauseGridRefresh = false; // ปลดล็อกให้ระบบรีเฟรชอัตโนมัติกลับมาทำงานต่อแม้จะเกิด Error
                     Swal.fire('ข้อผิดพลาด', err.message || 'การบันทึกข้อมูลล้มเหลว', 'error');
                     window.forceRefreshSchGrid(true); 
                     throw err; 
@@ -5576,68 +5593,70 @@
                 let latestData = window.interactiveSchData;
                 let conflictMsg = [];
                 let currentCourseCount = 0;
+                let isEditAction = (rowId !== null);
 
-                for (let i = 0; i < latestData.length; i++) {
-                    let s = latestData[i];
-                    if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
-                    // แก้ไขจุดที่ 1: ตรวจสอบจำนวนคาบแยกตาม ห้อง + แผนการเรียน
-                    if (String(s['ห้องเรียน'] || '').trim() === room && String(s['แผนการเรียน'] || '').trim() === plan && String(s['รหัสวิชา'] || '').trim() === code) {
-                        currentCourseCount++;
+                // ปิดการทำงานของระบบเช็คข้อมูลชนทั้งหมด หากเป็นการแก้ไข
+                if (!isEditAction) {
+                    for (let i = 0; i < latestData.length; i++) {
+                        let s = latestData[i];
+                        if (rowId !== null && String(s.originalIndex) === String(rowId)) continue;
+                        if (s['ห้องเรียน'] === room && s['แผนการเรียน'] === plan && s['รหัสวิชา'] === code) {
+                            currentCourseCount++;
+                        }
                     }
-                }
 
-                let courseInfo = window.interactiveCourses.find(c => String(c['รหัสวิชา'] || '').trim() === code);
-                if (courseInfo) {
-                    let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
-                    let credit = parseFloat(creditStr);
-                    let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
-                    if (maxPeriods > 0 && (currentCourseCount + periodChks.length) > maxPeriods) {
-                        conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${periodChks.length} คาบ แต่จะเกินกำหนดของห้องนี้ (${maxPeriods} คาบ/สัปดาห์)`);
+                    let courseInfo = window.interactiveCourses.find(c => String(c['รหัสวิชา'] || '').trim() === code);
+                    if (courseInfo) {
+                        let creditStr = String(courseInfo['หน่วยกิต'] || '').trim();
+                        let credit = parseFloat(creditStr);
+                        let maxPeriods = (!isNaN(credit) && credit > 0) ? (credit * 2) : 0;
+                        if (maxPeriods > 0 && (currentCourseCount + periodChks.length) > maxPeriods) {
+                            conflictMsg.push(`- <b>วิชา ${code}</b> ต้องการจัดเพิ่ม ${periodChks.length} คาบ แต่จะเกินกำหนดของห้องนี้ (${maxPeriods} คาบ/สัปดาห์)`);
+                        }
                     }
-                }
 
-                periodChks.forEach(p => {
-                    latestData.forEach(slot => {
-                        if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
+                    periodChks.forEach(p => {
+                        latestData.forEach(slot => {
+                            if (rowId !== null && String(slot.originalIndex) === String(rowId)) return;
 
-                        if (String(slot['วัน'] || '').trim() === day && parseInt(slot['คาบที่']) === p) {
-                            let sRoom = String(slot['ห้องเรียน'] || '').trim();
-                            let sPlan = String(slot['แผนการเรียน'] || '').trim();
+                            if (String(slot['วัน'] || '').trim() === day && parseInt(slot['คาบที่']) === p) {
+                                let sRoom = String(slot['ห้องเรียน'] || '').trim();
+                                let sPlan = String(slot['แผนการเรียน'] || '').trim();
 
-                            // [แก้ไขล่าสุด]: อนุญาตให้ห้องเดียวกันแต่คนละแผนการเรียน จัดลงในคาบเดียวกันได้ 
-                            // (ระบบจะข้ามการเช็คครูชนและห้องชนให้ทันที สำหรับกรณีเรียนรวมแผน)
-                            if (sRoom !== '' && sRoom !== '-' && sRoom === room && sPlan !== plan) {
-                                return; 
-                            }
+                                // [แก้ไขล่าสุด]: อนุญาตให้ห้องเดียวกันแต่คนละแผนการเรียน จัดลงในคาบเดียวกันได้ 
+                                // (ระบบจะข้ามการเช็คครูชนและห้องชนให้ทันที สำหรับกรณีเรียนรวมแผน)
+                                if (sRoom !== '' && sRoom !== '-' && sRoom === room && sPlan !== plan) {
+                                    return; 
+                                }
 
-                            let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
-                            let sLocation = String(slot['สถานที่เรียน'] || '').trim();
+                                let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
+                                let sLocation = String(slot['สถานที่เรียน'] || '').trim();
 
-                            let inputTeacherList = teacher.split(',').map(t => t.replace(/\s+/g, ''));
-                            let sTeacherList = sTeacher.split(',').map(t => t.replace(/\s+/g, ''));
-                            let hasCommonTeacher = inputTeacherList.some(t => sTeacherList.includes(t) && t !== '');
+                                let inputTeacherList = teacher.split(',').map(t => t.replace(/\s+/g, ''));
+                                let sTeacherList = sTeacher.split(',').map(t => t.replace(/\s+/g, ''));
+                                let hasCommonTeacher = inputTeacherList.some(t => sTeacherList.includes(t) && t !== '');
 
-                            if (hasCommonTeacher) {
-                                let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
-                                if (String(slot['รหัสวิชา'] || '').trim() === 'กิจกรรม' || String(slot['รหัสวิชา'] || '').trim() === 'ภารกิจพิเศษ' || sRoom === '-') {
-                                    conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจพิเศษ "${slot['ชื่อวิชา']}"`);
-                                } else {
-                                    conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                if (hasCommonTeacher) {
+                                    let shortTeacher = teacher.split(',').map(t => t.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).join(', ');
+                                    if (String(slot['รหัสวิชา'] || '').trim() === 'กิจกรรม' || String(slot['รหัสวิชา'] || '').trim() === 'ภารกิจพิเศษ' || sRoom === '-') {
+                                        conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> ติดภารกิจพิเศษ "${slot['ชื่อวิชา']}"`);
+                                    } else {
+                                        conflictMsg.push(`- คาบ ${p}: <b>ครู${shortTeacher}</b> มีสอนวิชา ${slot['รหัสวิชา']} (ชั้น ${sRoom}) อยู่แล้ว`);
+                                    }
+                                }
+                                
+                                if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
+                                    conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
+                                }
+                                
+                                if (sRoom !== '' && sRoom !== '-' && sRoom === room && sPlan === plan) {
+                                    let planText = plan ? ` (แผนฯ ${plan})` : '';
+                                    conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}${planText}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
                                 }
                             }
-                            
-                            if (locationVal !== '' && sLocation === locationVal && sLocation !== '-') {
-                                conflictMsg.push(`- คาบ ${p}: <b>สถานที่ "${locationVal}"</b> มีการใช้งานโดยชั้น ${sRoom} อยู่แล้ว`);
-                            }
-                            
-                            // เช็คชั้นเรียนชน โดยยึด "ห้อง + แผนการเรียน"
-                            if (sRoom !== '' && sRoom !== '-' && sRoom === room && sPlan === plan) {
-                                let planText = plan ? ` (แผนฯ ${plan})` : '';
-                                conflictMsg.push(`- คาบ ${p}: <b>ชั้น ${room}${planText}</b> มีการจัดวิชาอื่นในคาบนี้ไปแล้ว`);
-                            }
-                        }
+                        });
                     });
-                });
+                } // ปิดเงื่อนไข if (!isEditAction) อย่างสมบูรณ์
 
                 if (conflictMsg.length > 0) {
                     let confirmSave = await Swal.fire({
@@ -6118,8 +6137,18 @@
                                             let rawTeachers = slot.allTeachers ? slot.allTeachers.join(',') : slot['ชื่อครูผู้สอน'];
                                             let teachersList = String(rawTeachers || '').split(',').map(t => t.trim()).filter(t => t);
                                             let cleanNames = teachersList.map(tName => {
-                                                let cleanName = String(tName || '').replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                                return cleanName ? 'ครู' + cleanName.split(' ')[0] : '';
+                                                let rawName = String(tName || '').trim();
+                                                let cleanName = rawName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
+                                                if (!cleanName) return '';
+                                                let shortName = cleanName.split(' ')[0];
+                                                let tInfo = teachers.find(t => String(t['ชื่อ-สกุล']).replace(/\s+/g, '') === rawName.replace(/\s+/g, ''));
+                                                if (tInfo) {
+                                                    let group = String(tInfo['กลุ่มสาระการเรียนรู้'] || '');
+                                                    let role = String(tInfo['บทบาท'] || '');
+                                                    if ((group.includes('ผู้อำนวยการ') && !group.includes('รอง')) || (role.includes('ผู้อำนวยการ') && !role.includes('รอง'))) return 'ผอ.' + shortName;
+                                                    if (group.includes('รองผู้อำนวยการ') || role.includes('รองผู้อำนวยการ')) return 'รอง' + shortName;
+                                                }
+                                                return 'ครู' + shortName;
                                             }).filter(n => n);
                                             let displayTeacher = [...new Set(cleanNames)].join(', ');
                                             innerHtml += `<div class="text-[10px] text-blue-700 mt-1">${displayTeacher}</div>`;
@@ -6234,14 +6263,9 @@
             let dirName = lastOrder['ผู้อำนวยการ'] || '';
             let savedGaruda = lastOrder['ตราสัญลักษณ์'] || ''; // ดึงภาพตราครุฑที่เคยบันทึกไว้
 
-            container.innerHTML = `
-                <div class="bg-white p-8 rounded-xl shadow-md max-w-3xl mx-auto mt-6">
-                    <div class="text-center mb-6">
-                        <i class="fas fa-file-signature text-5xl text-navy mb-3"></i>
-                        <h3 class="text-2xl font-bold text-navy">ประมวลคำสั่งสอน</h3>
-                        <p class="text-gray-500 text-sm mt-1">กำหนดรายละเอียดเพื่อสร้างเอกสารคำสั่งมอบหมายภาระงานสอน</p>
-                    </div>
-                    
+            let isAdmin = currentRole === 'admin';
+
+            let adminFormHtml = `
                     <form id="orderForm" class="space-y-6">
                         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div>
@@ -6294,23 +6318,54 @@
                             </button>
                         </div>
                     </form>
+            `;
+
+            let userHtml = `
+                    <div class="text-center py-6">
+                        <p class="text-gray-600 mb-8 leading-relaxed text-left border-l-4 border-gold bg-yellow-50 p-4 rounded">ระบบจะสร้างเอกสารคำสั่งสอนอย่างเป็นทางการตามรูปแบบงานสารบรรณ โดยอ้างอิงข้อมูลล่าสุดที่ผู้ดูแลระบบได้ประมวลผลไว้ เพื่อให้ท่านสามารถสั่งพิมพ์หรือบันทึกเป็นไฟล์ PDF ได้ทันที</p>
+                        
+                        <!-- ข้อมูลซ่อนไว้สำหรับดึงไปสร้างตาราง -->
+                        <input type="hidden" id="o_order_number" value="${orderNum}">
+                        <input type="hidden" id="o_term" value="${term}">
+                        <input type="hidden" id="o_year" value="${year}">
+                        <input type="hidden" id="o_effective_date" value="${effDate}">
+                        <input type="hidden" id="o_order_date" value="${ordDate}">
+                        <input type="hidden" id="o_director_name" value="${dirName}">
+                        <input type="hidden" id="o_garuda_base64" value="${savedGaruda}">
+
+                        <button type="button" onclick="processOrders(true)" class="bg-navy text-white font-bold text-lg px-8 py-3 rounded-full hover:bg-opacity-90 shadow-lg transform transition hover:-translate-y-1 flex items-center justify-center mx-auto w-full max-w-sm">
+                            <i class="fas fa-print mr-2"></i> สั่งพิมพ์ / ดาวน์โหลด PDF
+                        </button>
+                    </div>
+            `;
+
+            container.innerHTML = `
+                <div class="bg-white p-8 rounded-xl shadow-md max-w-3xl mx-auto mt-6">
+                    <div class="text-center mb-6">
+                        <i class="fas fa-file-signature text-5xl text-navy mb-3"></i>
+                        <h3 class="text-2xl font-bold text-navy">${isAdmin ? 'ประมวลคำสั่งสอน' : 'ดาวน์โหลดคำสั่งภาระงานสอน'}</h3>
+                        <p class="text-gray-500 text-sm mt-1">${isAdmin ? 'กำหนดรายละเอียดเพื่อสร้างเอกสารคำสั่งมอบหมายภาระงานสอน' : ''}</p>
+                    </div>
+                    ${isAdmin ? adminFormHtml : userHtml}
                 </div>
             `;
 
-            // จัดการการอัปโหลดและพรีวิวตราครุฑ
-            document.getElementById('o_garuda_upload').addEventListener('change', function(e) {
-                const file = e.target.files[0];
-                if (!file) return;
+            // จัดการการอัปโหลดและพรีวิวตราครุฑ (เฉพาะ Admin ที่มีฟอร์มอัปโหลด)
+            if (isAdmin) {
+                document.getElementById('o_garuda_upload').addEventListener('change', function(e) {
+                    const file = e.target.files[0];
+                    if (!file) return;
 
-                const reader = new FileReader();
-                reader.onload = function(event) {
-                    document.getElementById('o_garuda_preview').src = event.target.result;
-                    document.getElementById('o_garuda_preview').classList.remove('hidden');
-                    document.getElementById('o_garuda_icon').classList.add('hidden');
-                    document.getElementById('o_garuda_base64').value = event.target.result;
-                }
-                reader.readAsDataURL(file);
-            });
+                    const reader = new FileReader();
+                    reader.onload = function(event) {
+                        document.getElementById('o_garuda_preview').src = event.target.result;
+                        document.getElementById('o_garuda_preview').classList.remove('hidden');
+                        document.getElementById('o_garuda_icon').classList.add('hidden');
+                        document.getElementById('o_garuda_base64').value = event.target.result;
+                    }
+                    reader.readAsDataURL(file);
+                });
+            }
 
             // ฟังก์ชันแปลงตัวเลขเป็นเลขไทย
             const toThaiNum = (str) => {
@@ -6327,7 +6382,7 @@
                 return `วันที่ ${d.getDate()} เดือน ${months[d.getMonth()]} พ.ศ. ${d.getFullYear() + 543}`;
             };
 
-            window.processOrders = async () => {
+            window.processOrders = async (isReadOnly = false) => {
                 const termInput = document.getElementById('o_term').value;
                 const yearInput = document.getElementById('o_year').value;
                 const orderNumberInput = document.getElementById('o_order_number').value;
@@ -6351,18 +6406,20 @@
                     didOpen: () => { Swal.showLoading(); }
                 });
 
-                // บันทึกข้อมูลลงชีท "คำสั่งสอน" (ระบบจะสร้างชีทและหัวคอลัมน์ให้อัตโนมัติถ้ามีโค้ดรองรับใน Apps Script)
-                const savePayload = {
-                    'เลขที่คำสั่ง': orderNumberInput,
-                    'ภาคเรียน': termInput,
-                    'ปีการศึกษา': yearInput,
-                    'เริ่มใช้ตั้งแต่วันที่': effectiveDateInput,
-                    'สั่ง ณ วันที่': orderDateInput,
-                    'ผู้อำนวยการ': directorNameInput,
-                    'ตราสัญลักษณ์': garudaBase64
-                };
-                callAPI('saveData', { sheetName: 'คำสั่งสอน', rowId: null, data: savePayload }, true);
-                getCachedData('คำสั่งสอน', true, true); // อัปเดตแคชเงียบๆ
+                // บันทึกข้อมูลลงชีท "คำสั่งสอน" (เฉพาะ Admin ที่กดประมวลผล)
+                if (!isReadOnly && currentRole === 'admin') {
+                    const savePayload = {
+                        'เลขที่คำสั่ง': orderNumberInput,
+                        'ภาคเรียน': termInput,
+                        'ปีการศึกษา': yearInput,
+                        'เริ่มใช้ตั้งแต่วันที่': effectiveDateInput,
+                        'สั่ง ณ วันที่': orderDateInput,
+                        'ผู้อำนวยการ': directorNameInput,
+                        'ตราสัญลักษณ์': garudaBase64
+                    };
+                    callAPI('saveData', { sheetName: 'คำสั่งสอน', rowId: null, data: savePayload }, true);
+                    getCachedData('คำสั่งสอน', true, true); // อัปเดตแคชเงียบๆ
+                }
 
                 // ดึงข้อมูลครู ข้อมูลอัตรากำลังรายวิชา และข้อมูลกิจกรรมที่ถูกล๊อคไว้ เพื่อนำมาสรุปภาระงานให้ครบถ้วน
                 let [teachers, coursesData, settingsData, scheduleData] = await Promise.all([
