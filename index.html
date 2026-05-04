@@ -2928,14 +2928,14 @@
                 tbody.innerHTML = data.map((d) => {
                     let isActivity = d['รหัสวิชา'] === 'กิจกรรม' || d['รหัสวิชา'] === 'ภารกิจพิเศษ' || d['ห้องเรียน'] === '-';
                     let trClass = d.isPending ? 'opacity-60 bg-gray-50' : (isActivity ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-gray-50');
-                    let displayRoom = d['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : d['ห้องเรียน'];
+                    let displayRoom = d['ห้องเรียน'] ? d['ห้องเรียน'] : '-';
                     return `
                     <tr class="border-b ${trClass}">
-                        <td class="p-2 border text-center">${displayRoom}</td><td class="p-2 border text-center">${d['แผนการเรียน'] || '-'}</td><td class="p-2 border text-center">${d['วัน']}</td>
-                        <td class="p-2 border text-center">${d['คาบที่']}</td>
-                        <td class="p-2 border font-bold ${isActivity ? 'text-purple-700' : ''}">${d['รหัสวิชา']}</td>
-                        <td class="p-2 border ${isActivity ? 'text-purple-700 font-semibold' : ''}">${d['ชื่อวิชา']}</td>
-                        <td class="p-2 border">${d['ชื่อครูผู้สอน']}</td><td class="p-2 border text-center">${d['สถานที่เรียน'] || '-'}</td>
+                        <td class="p-2 border text-center">${displayRoom}</td><td class="p-2 border text-center">${d['แผนการเรียน'] || '-'}</td><td class="p-2 border text-center">${d['วัน'] || ''}</td>
+                        <td class="p-2 border text-center">${d['คาบที่'] || ''}</td>
+                        <td class="p-2 border font-bold ${isActivity ? 'text-purple-700' : ''}">${d['รหัสวิชา'] || ''}</td>
+                        <td class="p-2 border ${isActivity ? 'text-purple-700 font-semibold' : ''}">${d['ชื่อวิชา'] || ''}</td>
+                        <td class="p-2 border">${d['ชื่อครูผู้สอน'] || ''}</td><td class="p-2 border text-center">${d['สถานที่เรียน'] || '-'}</td>
                         <td class="p-2 border text-center whitespace-nowrap">
                             ${d.isPending ?
                                 `<i class="fas fa-spinner fa-spin text-blue-600"></i>` :
@@ -3092,11 +3092,11 @@
 
                 tbody.innerHTML = window.tempSchList.map((s, idx) => `
                     <tr class="border-b bg-white hover:bg-gray-50">
-                        <td class="p-2 border-b text-center">${s['วัน']}</td>
-                        <td class="p-2 border-b text-center">${s['คาบที่']}</td>
-                        <td class="p-2 border-b text-center">${s['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : s['ห้องเรียน']}</td>
-                        <td class="p-2 border-b font-semibold text-navy">${s['รหัสวิชา']} - ${s['ชื่อวิชา']}</td>
-                        <td class="p-2 border-b">${s['ชื่อครูผู้สอน']}</td>
+                        <td class="p-2 border-b text-center">${s['วัน'] || ''}</td>
+                        <td class="p-2 border-b text-center">${s['คาบที่'] || ''}</td>
+                        <td class="p-2 border-b text-center">${s['ห้องเรียน'] ? s['ห้องเรียน'] : '-'}</td>
+                        <td class="p-2 border-b font-semibold text-navy">${s['รหัสวิชา'] || ''} - ${s['ชื่อวิชา'] || ''}</td>
+                        <td class="p-2 border-b">${s['ชื่อครูผู้สอน'] || ''}</td>
                         <td class="p-2 border-b text-center">
                             <button type="button" onclick="removeTempSch(${idx})" class="text-red-500 hover:text-red-700 bg-red-50 px-2 py-1 rounded shadow-sm"><i class="fas fa-trash"></i></button>
                         </td>
@@ -4138,7 +4138,7 @@
                 tbody.innerHTML = data.map((d) => {
                     let isActivity = d['รหัสวิชา'] === 'กิจกรรม' || d['รหัสวิชา'] === 'ภารกิจพิเศษ' || d['ห้องเรียน'] === '-';
                     let trClass = d.isPending ? 'opacity-60 bg-gray-50' : (isActivity ? 'bg-purple-50 hover:bg-purple-100' : 'hover:bg-gray-50');
-                    let displayRoom = d['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : d['ห้องเรียน'];
+                    let displayRoom = d['ห้องเรียน'] ? d['ห้องเรียน'] : '-';
                     
                     let creator = d['ผู้บันทึก'] || '';
                     let isOwner = (creator === currentUser) || (currentRole === 'admin') || (!creator);
@@ -4168,11 +4168,11 @@
                     <tr class="border-b ${trClass}">
                         <td class="p-2 border text-center">${displayRoom}</td>
                         <td class="p-2 border text-center">${d['แผนการเรียน'] || '-'}</td>
-                        <td class="p-2 border text-center">${d['วัน']}</td>
-                        <td class="p-2 border text-center">${d['คาบที่']}</td>
-                        <td class="p-2 border font-bold ${isActivity ? 'text-purple-700' : ''} text-center">${d['รหัสวิชา']}</td>
-                        <td class="p-2 border ${isActivity ? 'text-purple-700 font-semibold' : ''}">${d['ชื่อวิชา']}</td>
-                        <td class="p-2 border text-center">${d['ชื่อครูผู้สอน']}</td>
+                        <td class="p-2 border text-center">${d['วัน'] || ''}</td>
+                        <td class="p-2 border text-center">${d['คาบที่'] || ''}</td>
+                        <td class="p-2 border font-bold ${isActivity ? 'text-purple-700' : ''} text-center">${d['รหัสวิชา'] || ''}</td>
+                        <td class="p-2 border ${isActivity ? 'text-purple-700 font-semibold' : ''}">${d['ชื่อวิชา'] || ''}</td>
+                        <td class="p-2 border text-center">${d['ชื่อครูผู้สอน'] || ''}</td>
                         <td class="p-2 border text-center">${d['สถานที่เรียน'] || '-'}</td>
                         <td class="p-2 border text-center text-xs ${d['ประเภท'] === 'ล็อค' ? 'text-red-600 font-bold' : 'text-gray-600'}">${d['ประเภท'] || 'ปกติ'}</td>
                         <td class="p-2 border text-center whitespace-nowrap">
@@ -5571,10 +5571,7 @@
                 
                 if (window.interactiveViewMode === 'teacher') {
                     if (!room) {
-                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือระดับชั้น/ห้องให้ถูกต้อง', 'warning');
-                    }
-                    if (!plan) {
-                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกแผนการเรียน', 'warning');
+                        return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้องให้ถูกต้อง', 'warning');
                     }
                 }
 
@@ -5753,7 +5750,7 @@
         }
 
 
-         // --- 7. ดาวน์โหลดตารางสอน ---
+       // --- 7. ดาวน์โหลดตารางสอน ---
         async function renderDownload(container) {
             // โหลดข้อมูลดิบจาก 'กำหนดตารางสอน' แล้วนำมาประมวลผลที่หน้าเว็บโดยตรง
             let [settingsArr, teachers, rawData] = await Promise.all([
@@ -5853,7 +5850,8 @@
 
                     <div class="flex flex-wrap gap-2 w-full lg:w-auto mt-2 lg:mt-0">
                         <button onclick="previewTimetable()" class="bg-navy text-white px-4 py-2 rounded-lg hover:bg-opacity-90 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-search mr-2"></i> แสดงตาราง</button>
-                        <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-download mr-2"></i> ดาวน์โหลด JPG</button>
+                        <button onclick="printTimetable()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-file-pdf mr-2"></i> ดาวน์โหลด PDF / พิมพ์</button>
+                        <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-image mr-2"></i> ดาวน์โหลด JPG</button>
                         <button onclick="forceRefreshDownload()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 h-[38px] flex items-center justify-center text-sm shadow-sm transition" title="ดึงข้อมูลล่าสุดจากระบบ"><i class="fas fa-sync-alt"></i></button>
                     </div>
 
@@ -6052,15 +6050,11 @@
                     currentTimeMinHeader += currentDur;
                     let endStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
                     
-                    if (isBreak) {
-                         thsTemplate += `<th class="border border-navy p-2 w-16 align-middle" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(255,255,255,0.2);">
-                                    พัก<br><span class="text-[9px] font-normal opacity-80">${startStr}-${endStr}</span>
-                                </th>`;
-                    } else {
-                        thsTemplate += `<th class="border border-navy p-2 w-24 align-middle" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">
-                                    คาบ ${i}<br><span class="text-[10px] font-normal opacity-80">${startStr}-${endStr}</span>
-                                </th>`;
-                    }
+                    let widthClass = isBreak ? 'w-16' : 'w-24';
+                    
+                    thsTemplate += `<th class="border border-navy p-2 ${widthClass} align-middle" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">
+                                คาบ ${i}<br><span class="text-[10px] font-normal opacity-80">${startStr}-${endStr}</span>
+                            </th>`;
                 }
 
                 const days = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
@@ -6069,14 +6063,22 @@
                 // วนลูปวาดตารางทีละหน้าตามข้อมูลที่จัดกลุ่มมาได้
                 tablesToRender.forEach((tableData) => {
                     let trs = '';
-                    days.forEach(day => {
+                    days.forEach((day, dayIndex) => {
                         let tds = '';
                         let i = 1;
                         while(i <= maxPeriod) {
                             if (i === breakPeriod) {
-                                tds += `<td class="border border-navy p-2 text-center align-middle text-xs w-16" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(0,0,0,0.1);">
-                                            <i class="fas fa-utensils mb-1"></i><br>พัก
-                                        </td>`;
+                                // ผสานเซลล์แนวตั้ง 5 แถว และใช้ CSS Rotate เพื่อทำตัวหนังสือแนวตั้งที่สมบูรณ์แบบ
+                                if (dayIndex === 0) {
+                                    tds += `<td rowspan="5" class="border border-navy p-0 text-center align-middle w-16" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(0,0,0,0.1);">
+                                                <div style="height: 350px; position: relative; width: 100%;">
+                                                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; letter-spacing: 1px;" class="font-bold text-[14px] flex items-center gap-3">
+                                                        <span>พักรับประทานอาหาร และปฏิบัติศาสนกิจ</span>
+                                                        <i class="fas fa-utensils opacity-80" style="transform: rotate(90deg);"></i>
+                                                    </div>
+                                                </div>
+                                            </td>`;
+                                }
                                 i++;
                                 continue;
                             }
@@ -6181,14 +6183,16 @@
 
                     // สร้างชื่อไฟล์ตามเงื่อนไข (เพื่อใช้ตอนดาวน์โหลด)
                     let cleanSubtitle = tableData.subtitle.replace(/&nbsp;\|&nbsp;/g, '_').replace(/<[^>]*>?/gm, '').replace(/[:/\s]+/g, '-');
-                    let filename = `ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'}_${cleanSubtitle}.jpg`;
+                    let filename = `ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'}_${cleanSubtitle}`;
 
-                    // ใส่ Container ตารางแต่ละอันต่อกัน
+                    // ใส่ Container ตารางแต่ละอันต่อกัน (เพิ่ม crossorigin="anonymous" ให้ logo เพื่อให้วาดลง PDF ได้)
                     allHtml += `
                         <div class="timetable-page bg-white p-8 w-[1000px] shadow-lg relative border-t-4 border-navy rounded-sm" data-filename="${filename}">
-                            <div class="flex items-center justify-center mb-6 relative">
-                                <img src="${settings.logo || 'https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png'}" class="absolute left-0 w-24 h-24 object-contain app-logo">
-                                <div class="text-center">
+                            <div class="flex items-center justify-center mb-6 relative" style="min-height: 100px;">
+                                <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
+                                    <img src="${settings.logo || 'https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png'}" crossorigin="anonymous" style="width: 96px; height: 96px; object-fit: contain;">
+                                </div>
+                                <div class="text-center w-full">
                                     <h2 class="text-2xl font-bold text-navy">${schoolName}</h2>
                                     <h3 class="text-xl font-bold text-gold">ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'} ภาคเรียนที่ ${settings.term}/${settings.year}</h3>
                                     <p class="text-sm font-semibold mt-1 text-gray-700">${tableData.subtitle}</p>
@@ -6210,6 +6214,241 @@
                 document.getElementById('timetableCanvas').innerHTML = allHtml;
             };
 
+            // --- ฟังก์ชันดาวน์โหลด PDF (พร้อมหน้าต่างจัดรูปแบบ) ---
+            window.printTimetable = () => {
+                const pages = document.querySelectorAll('.timetable-page');
+                if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงตาราง" ก่อนดาวน์โหลด PDF', 'warning');
+
+                let printContent = document.getElementById('timetableCanvas').innerHTML;
+                const printWindow = window.open('', '_blank');
+
+                printWindow.document.write(`
+                    <!DOCTYPE html>
+                    <html lang="th">
+                    <head>
+                        <meta charset="UTF-8">
+                        <title>พิมพ์ / ดาวน์โหลด PDF ตารางสอน - NS Student Care</title>
+                        <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+                        <script src="https://cdn.tailwindcss.com">\x3C/script>
+                        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js">\x3C/script>
+                        <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js">\x3C/script>
+                        <style id="dynamic-print-style">
+                            @page { size: A4 landscape; margin: 10mm; }
+                        </style>
+                        <style>
+                            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+                            body { font-family: 'Sarabun', sans-serif !important; background-color: #525659; margin: 0; padding-top: 130px; }
+                            
+                            .preview-toolbar { position: fixed; top: 0; left: 0; right: 0; background: #1e293b; color: white; padding: 15px 30px; display: flex; flex-direction: column; gap: 10px; z-index: 9999; box-shadow: 0 4px 10px rgba(0,0,0,0.5); border-bottom: 3px solid #10b981; }
+                            .toolbar-top { display: flex; justify-content: space-between; align-items: center; }
+                            .toolbar-bottom { display: flex; justify-content: flex-start; align-items: center; gap: 20px; background: #334155; padding: 10px 15px; border-radius: 8px; }
+                            
+                            .setting-group { display: flex; align-items: center; gap: 8px; font-size: 14pt; }
+                            .setting-group select { padding: 4px 8px; border-radius: 4px; border: 1px solid #cbd5e1; font-family: 'Sarabun', sans-serif; font-size: 14pt; color: #1e293b; outline: none; cursor: pointer; }
+                            
+                            .btn-container { display: flex; gap: 15px; }
+                            .pdf-btn { background: #10b981; color: white; border: 1px solid #059669; padding: 8px 30px; font-size: 16pt; font-family: 'Sarabun', sans-serif; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                            .pdf-btn:hover { background: #059669; transform: translateY(-1px); }
+                            .print-btn { background: #3b82f6; color: white; border: 1px solid #2563eb; padding: 8px 30px; font-size: 16pt; font-family: 'Sarabun', sans-serif; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                            .print-btn:hover { background: #2563eb; transform: translateY(-1px); }
+                            .close-btn { background: #475569; color: white; border: 1px solid #334155; padding: 8px 30px; font-size: 16pt; font-family: 'Sarabun', sans-serif; cursor: pointer; border-radius: 8px; font-weight: bold; transition: 0.2s; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+                            .close-btn:hover { background: #334155; transform: translateY(-1px); }
+                            
+                            .a4-container { background: transparent; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 20px; padding-bottom: 40px; }
+                            
+                            /* จัดเรียงต่อกันและแบ่งหน้า */
+                            .timetable-page { background: white !important; margin: 0 auto; box-shadow: 0 0 20px rgba(0,0,0,0.5); page-break-after: always; width: 100% !important; max-width: 297mm; }
+                            .timetable-page:last-child { page-break-after: auto; }
+
+                            /* ลบ border-t-4 ออกตอนพิมพ์เพื่อความสวยงาม */
+                            .timetable-page { border-top: none !important; }
+                            
+                            table { width: 100%; border-collapse: collapse; border: 2px solid #1A2942 !important; }
+                            th, td { border: 1px solid #1A2942 !important; }
+                            
+                            @media print {
+                                .preview-toolbar { display: none !important; }
+                                body { padding-top: 0; background-color: white; }
+                                .timetable-page { box-shadow: none; margin: 0; border: none; width: 100% !important; max-width: 100% !important; }
+                                .timetable-page { font-size: 12pt; }
+                                .timetable-page table { font-size: 11pt; }
+                            }
+                        </style>
+                        <script>
+                            function updatePrintStyles() {
+                                const size = document.getElementById('paperSize').value;
+                                const orientation = document.getElementById('orientation').value;
+                                const margin = document.getElementById('margin').value;
+
+                                const styleEl = document.getElementById('dynamic-print-style');
+                                styleEl.innerHTML = '@page { size: ' + size + ' ' + orientation + '; margin: ' + margin + '; }';
+
+                                let width = '297mm';
+                                if(size === 'A4') { width = orientation === 'portrait' ? '210mm' : '297mm'; }
+                                else if(size === 'A3') { width = orientation === 'portrait' ? '297mm' : '420mm'; }
+                                else if(size === 'Letter') { width = orientation === 'portrait' ? '215.9mm' : '279.4mm'; }
+                                else if(size === 'Legal') { width = orientation === 'portrait' ? '215.9mm' : '355.6mm'; }
+
+                                document.querySelectorAll('.timetable-page').forEach(page => {
+                                    page.style.maxWidth = width;
+                                    if(orientation === 'portrait') {
+                                        page.style.transform = 'scale(0.9)';
+                                        page.style.transformOrigin = 'top center';
+                                    } else {
+                                        page.style.transform = 'none';
+                                    }
+                                });
+                            }
+
+                            async function downloadDirectPDF() {
+                                const btn = document.getElementById('btn-download-pdf');
+                                const originalText = btn.innerHTML;
+                                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังสร้าง PDF...';
+                                btn.disabled = true;
+
+                                try {
+                                    const { jsPDF } = window.jspdf;
+                                    const orientation = document.getElementById('orientation').value;
+                                    const format = document.getElementById('paperSize').value.toLowerCase();
+                                    
+                                    const doc = new jsPDF({ orientation: orientation, unit: 'mm', format: format });
+                                    const pages = document.querySelectorAll('.timetable-page');
+                                    
+                                    const marginStr = document.getElementById('margin').value;
+                                    const margin = parseInt(marginStr.replace('mm', '')) || 10;
+
+                                    // รอโหลดรูประหว่างสร้าง PDF เพื่อให้โลโก้ไม่หาย
+                                    const images = document.querySelectorAll('img');
+                                    await Promise.all(Array.from(images).map(img => {
+                                        if (img.complete) return Promise.resolve();
+                                        return new Promise(resolve => {
+                                            img.onload = resolve;
+                                            img.onerror = resolve;
+                                        });
+                                    }));
+
+                                    for (let i = 0; i < pages.length; i++) {
+                                        const page = pages[i];
+                                        
+                                        // เอา Style ออกชั่วคราวเพื่อให้ html2canvas จับภาพได้ถูกต้อง 100%
+                                        const origTransform = page.style.transform;
+                                        const origMaxWidth = page.style.maxWidth;
+                                        page.style.transform = 'none';
+                                        page.style.maxWidth = 'none';
+
+                                        // บังคับให้เลื่อนกลับไปด้านบนสุดก่อนแคปเจอร์ ป้องกันบั๊กหน้าว่าง
+                                        window.scrollTo(0, 0);
+                                        await new Promise(r => setTimeout(r, 50));
+
+                                        const canvas = await html2canvas(page, { 
+                                            scale: 2, 
+                                            useCORS: true, 
+                                            backgroundColor: '#ffffff',
+                                            scrollY: 0 // บังคับไม่ให้อิงการ Scroll ของจอ
+                                        });
+                                        
+                                        // คืนค่า Style กลับมา
+                                        page.style.transform = origTransform;
+                                        page.style.maxWidth = origMaxWidth;
+
+                                        const imgData = canvas.toDataURL('image/jpeg', 0.98);
+                                        const pdfWidth = doc.internal.pageSize.getWidth();
+                                        const pdfHeight = doc.internal.pageSize.getHeight();
+                                        
+                                        const imgProps = doc.getImageProperties(imgData);
+                                        
+                                        // คำนวณ Scale เพื่อบีบให้พอดีกรอบกระดาษ (Fit to page)
+                                        const maxRenderWidth = pdfWidth - (margin * 2);
+                                        const maxRenderHeight = pdfHeight - (margin * 2);
+
+                                        let renderWidth = maxRenderWidth;
+                                        let renderHeight = (imgProps.height * renderWidth) / imgProps.width;
+
+                                        if (renderHeight > maxRenderHeight) {
+                                            renderHeight = maxRenderHeight;
+                                            renderWidth = (imgProps.width * renderHeight) / imgProps.height;
+                                        }
+
+                                        // จัดให้อยู่ตรงกลางหน้ากระดาษ
+                                        const xOffset = margin + (maxRenderWidth - renderWidth) / 2;
+                                        const yOffset = margin + (maxRenderHeight - renderHeight) / 2;
+
+                                        if (i > 0) doc.addPage();
+                                        doc.addImage(imgData, 'JPEG', xOffset, yOffset, renderWidth, renderHeight);
+                                    }
+
+                                    doc.save('ตารางสอน.pdf');
+                                } catch (err) {
+                                    console.error(err);
+                                    alert('เกิดข้อผิดพลาดในการสร้าง PDF');
+                                }
+
+                                btn.innerHTML = originalText;
+                                btn.disabled = false;
+                            }
+
+                            window.onload = function() {
+                                document.getElementById('orientation').value = 'landscape';
+                                document.getElementById('margin').value = '10mm';
+                                updatePrintStyles();
+                            };
+                        \x3C/script>
+                    </head>
+                    <body>
+                        <div class="preview-toolbar">
+                            <div class="toolbar-top">
+                                <div style="font-size: 18pt; font-weight: bold; color: #f8fafc !important;">
+                                    <i class="fas fa-file-pdf mr-2"></i> ระบบพิมพ์ / ดาวน์โหลด PDF (ตารางสอน)
+                                </div>
+                                <div class="btn-container">
+                                    <button id="btn-download-pdf" class="pdf-btn" onclick="downloadDirectPDF()">
+                                        <i class="fa-solid fa-file-pdf"></i> ดาวน์โหลด PDF ทันที
+                                    </button>
+                                    <button class="print-btn" onclick="window.print()">
+                                        <i class="fa-solid fa-print"></i> พิมพ์
+                                    </button>
+                                    <button class="close-btn" onclick="window.close()">
+                                        <i class="fa-solid fa-times"></i> ปิด
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="toolbar-bottom">
+                                <div class="setting-group">
+                                    <label>📄 ขนาดกระดาษ:</label>
+                                    <select id="paperSize" onchange="updatePrintStyles()">
+                                        <option value="A4">A4 (มาตรฐาน)</option>
+                                        <option value="A3">A3 (แผ่นใหญ่)</option>
+                                        <option value="Letter">Letter</option>
+                                        <option value="Legal">Legal</option>
+                                    </select>
+                                </div>
+                                <div class="setting-group">
+                                    <label>🔄 แนวกระดาษ:</label>
+                                    <select id="orientation" onchange="updatePrintStyles()">
+                                        <option value="landscape">แนวนอน (Landscape)</option>
+                                        <option value="portrait">แนวตั้ง (Portrait)</option>
+                                    </select>
+                                </div>
+                                <div class="setting-group">
+                                    <label>📏 ขอบกระดาษ:</label>
+                                    <select id="margin" onchange="updatePrintStyles()">
+                                        <option value="10mm">ปกติ (10mm)</option>
+                                        <option value="5mm">แคบ (5mm)</option>
+                                        <option value="15mm">กว้าง (15mm)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="a4-container" id="printable-content">
+                            ${printContent}
+                        </div>
+                    </body>
+                    </html>
+                `);
+                printWindow.document.close();
+            };
+
             window.downloadAsJPG = async () => {
                 const pages = document.querySelectorAll('.timetable-page');
                 if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงตาราง" ก่อนดาวน์โหลด', 'warning');
@@ -6228,7 +6467,7 @@
                         });
                         
                         const link = document.createElement('a');
-                        link.download = filename;
+                        link.download = filename + '.jpg';
                         link.href = canvas.toDataURL('image/jpeg', 0.9);
                         link.click();
                         
@@ -6244,7 +6483,7 @@
             };
         }
 
-        // --- 8. ประมวลคำสั่งสอน ---
+     // --- 8. ประมวลคำสั่งสอน ---
         async function renderOrders(container) {
             // ดึงการตั้งค่าพื้นฐานและประวัติคำสั่งล่าสุด
             let [settingsArr, orderArr] = await Promise.all([
@@ -6334,7 +6573,7 @@
                         <input type="hidden" id="o_garuda_base64" value="${savedGaruda}">
 
                         <button type="button" onclick="processOrders(true)" class="bg-navy text-white font-bold text-lg px-8 py-3 rounded-full hover:bg-opacity-90 shadow-lg transform transition hover:-translate-y-1 flex items-center justify-center mx-auto w-full max-w-sm">
-                            <i class="fas fa-print mr-2"></i> สั่งพิมพ์ / ดาวน์โหลด PDF
+                            <i class="fas fa-print mr-2"></i> สั่งพิมพ์ / ดาวน์โหลดเอกสาร
                         </button>
                     </div>
             `;
@@ -6497,13 +6736,17 @@
                             .order-date-section { margin-left: 5cm; margin-top: 0; margin-bottom: 0; line-height: 1.5; }
                             .signature-section { margin-left: 50%; text-align: center; line-height: 1.5; }
                             
-                            .btn-print {
-                                display: block; width: 200px; margin: -10px auto 30px auto; padding: 12px;
-                                background-color: #2563eb; color: white; text-align: center; 
+                            .action-buttons { display: flex; justify-content: center; gap: 15px; margin-bottom: 30px; margin-top: -10px; }
+                            .btn-action {
+                                padding: 12px 24px; color: white; text-align: center;
                                 text-decoration: none; border-radius: 8px; font-weight: bold; cursor: pointer;
                                 border: none; font-family: 'Sarabun', sans-serif; font-size: 14pt;
+                                transition: background-color 0.2s;
                             }
+                            .btn-print { background-color: #2563eb; }
                             .btn-print:hover { background-color: #1d4ed8; }
+                            .btn-word { background-color: #10b981; }
+                            .btn-word:hover { background-color: #059669; }
                             
                             .group-header { margin-top: 20px; margin-bottom: 10px; font-size: 16pt; font-weight: bold; line-height: 1.5; }
                             .teacher-header { margin-top: 15px; margin-bottom: 5px; font-size: 16pt; font-weight: bold; margin-left: 2.5cm; line-height: 1.5; }
@@ -6517,13 +6760,59 @@
                             
                             @media print {
                                 body { padding: 0; margin: 0; max-width: 100%; box-shadow: none; background-color: transparent; }
-                                .btn-print { display: none !important; }
+                                .action-buttons { display: none !important; }
                                 .page-break { page-break-before: always; }
                             }
                         </style>
+                        \x3Cscript>
+                            function exportToWord() {
+                                // โครงสร้าง XML มาตรฐานของ MS Word
+                                var header = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>คำสั่งสอน</title>";
+                                
+                                // ฝัง CSS สำหรับหน้า Word โดยเฉพาะ (เพื่อให้ได้กระดาษ A4 และขอบตรงเป๊ะ)
+                                var wordStyles = "<style>" +
+                                    "@page WordSection1 { size: 595.3pt 841.9pt; margin: 70.85pt 56.7pt 56.7pt 85.05pt; mso-header-margin: 35.4pt; mso-footer-margin: 35.4pt; mso-paper-source: 0; }" +
+                                    "div.WordSection1 { page: WordSection1; }" +
+                                    "table { border-collapse: collapse; width: 100%; margin: 10px 0; }" +
+                                    "td, th { border: 1px solid black; padding: 4px 8px; text-align: center; vertical-align: middle; }" +
+                                    "body, p, div, span, td, th { font-family: 'TH Sarabun PSK', 'Sarabun', 'Cordia New', sans-serif; font-size: 16pt; }" +
+                                    ".garuda-container { text-align: center; margin-bottom: 20px; }" +
+                                    ".order-header, .order-title { text-align: center; font-weight: bold; line-height: 1.5; }" +
+                                    ".content p { text-indent: 2.5cm; margin: 0; line-height: 1.5; text-align: justify; }" +
+                                    ".order-date-section { margin-left: 5cm; line-height: 1.5; }" +
+                                    ".signature-section { margin-left: 50%; text-align: center; line-height: 1.5; }" +
+                                    ".page-break { page-break-before: always; }" +
+                                    "</style>";
+                                
+                                header += wordStyles + "</head><body><div class='WordSection1'>";
+                                var footer = "</div></body></html>";
+                                
+                                // คัดลอก Body เพื่อลบปุ่มออกก่อนสร้างไฟล์
+                                var cloneBody = document.body.cloneNode(true);
+                                var buttons = cloneBody.querySelector('.action-buttons');
+                                if (buttons) buttons.parentNode.removeChild(buttons);
+
+                                var sourceHTML = header + cloneBody.innerHTML + footer;
+                                
+                                // แปลงเป็น Blob รองรับภาษาไทย (BOM)
+                                var blob = new Blob(['\\ufeff', sourceHTML], { type: 'application/msword' });
+                                var url = URL.createObjectURL(blob);
+                                
+                                var fileDownload = document.createElement("a");
+                                document.body.appendChild(fileDownload);
+                                fileDownload.href = url;
+                                fileDownload.download = 'คำสั่งสอน_${termInput}_${yearInput}.doc';
+                                fileDownload.click();
+                                document.body.removeChild(fileDownload);
+                                URL.revokeObjectURL(url);
+                            }
+                        \x3C/script>
                     </head>
                     <body>
-                        <button onclick="window.print()" class="btn-print">🖨️ สั่งพิมพ์ / บันทึก PDF</button>
+                        <div class="action-buttons no-print">
+                            <button onclick="window.print()" class="btn-action btn-print"><i class="fas fa-print mr-2"></i> สั่งพิมพ์ / บันทึก PDF</button>
+                            <button onclick="exportToWord()" class="btn-action btn-word"><i class="fas fa-file-word mr-2"></i> ดาวน์โหลดเป็น Word</button>
+                        </div>
                         
                         ${garudaBase64 ? `<div class="garuda-container"><img src="${garudaBase64}" alt="ตราครุฑ"></div>` : `<div class="garuda-container" style="height: 3cm;"></div>`}
                         
