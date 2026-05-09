@@ -926,9 +926,29 @@
             let currentTerm = window.courseCurrentTerm;
             
             let groupOptions = subjectGroups.map(g => `<option value="${g}">${g}</option>`).join('');
+            
+            // สร้าง Checkbox ของกลุ่มสาระล่วงหน้า
+            let groupCheckboxHtml = subjectGroups.map(g => `
+                <label class="flex items-center space-x-2 mb-1.5 cursor-pointer hover:bg-gray-100 p-1.5 rounded transition border border-transparent hover:border-gray-200">
+                    <input type="checkbox" value="${g}" class="chk-group w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold" onchange="window.updateModalTeacherCheckboxes()">
+                    <span class="text-sm font-medium text-gray-700">${g}</span>
+                </label>
+            `).join('');
+
             let teacherOptions = teachers.map(t => {
                 let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
                 return `<option value="${cleanName}">${cleanName}</option>`;
+            }).join('');
+            
+            // สร้าง Checkbox ของครูล่วงหน้า
+            let teacherCheckboxHtml = teachers.map(t => {
+                let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
+                return `
+                <label class="flex items-center space-x-2 mb-1.5 cursor-pointer hover:bg-gray-100 p-1.5 rounded transition border border-transparent hover:border-gray-200">
+                    <input type="checkbox" value="${cleanName}" class="chk-teacher w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                    <span class="text-sm font-medium text-gray-700">${cleanName}</span>
+                </label>
+                `;
             }).join('');
 
             window.pendingCourseSync = 0; 
@@ -1002,14 +1022,40 @@
                                 <input type="hidden" id="c_id">
                                 <input type="hidden" id="c_edit_mode" value="false">
                                 
-                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 bg-blue-50 p-4 rounded-lg border border-blue-100">
                                     <div><label class="block font-medium mb-1">ภาคเรียนที่</label><select id="c_term" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="1">1</option><option value="2">2</option></select></div>
-                                    <div><label class="block font-medium mb-1">กลุ่มสาระ</label><select id="c_group" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none" onchange="updateModalTeacherList()"><option value="">เลือก...</option>${groupOptions}</select></div>
-                                    <div><label class="block font-medium mb-1">ชื่อครูผู้สอน</label><select id="c_teacher" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"><option value="">เลือก...</option>${teacherOptions}</select></div>
-                                    
                                     <div><label class="block font-medium mb-1">รหัสวิชา</label><input type="text" id="c_code" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
-                                    <div><label class="block font-medium mb-1">ชื่อวิชา</label><input type="text" id="c_name" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                    <div class="md:col-span-1"><label class="block font-medium mb-1">ชื่อวิชา</label><input type="text" id="c_name" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
                                     <div><label class="block font-medium mb-1">หน่วยกิต</label><input type="number" step="0.5" id="c_credit" class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
+                                </div>
+
+                                <!-- ส่วนเลือกกลุ่มสาระและครูผู้สอนแบบ Multi-select -->
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4 bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                                    <!-- กลุ่มสาระ -->
+                                    <div class="flex flex-col h-full">
+                                        <label class="block font-bold mb-2 text-navy border-b pb-2">1. กลุ่มสาระการเรียนรู้ <span class="text-xs text-gray-500 font-normal">(ติ๊กเลือกได้มากกว่า 1)</span></label>
+                                        <div class="flex-1 max-h-40 overflow-y-auto border border-gray-200 rounded p-2 mb-3 bg-gray-50" id="group_checkbox_list">
+                                            ${groupCheckboxHtml}
+                                        </div>
+                                        <div class="flex gap-2 mb-2">
+                                            <button type="button" onclick="window.applySelectedGroups()" class="flex-1 bg-green-600 text-white px-3 py-2 rounded text-sm shadow hover:bg-green-700 transition font-bold"><i class="fas fa-plus"></i> เพิ่มลงฟอร์ม</button>
+                                            <button type="button" onclick="window.clearSelectedGroups()" class="bg-red-500 text-white px-3 py-2 rounded text-sm shadow hover:bg-red-600 transition" title="ล้างค่า"><i class="fas fa-eraser"></i> ล้าง</button>
+                                        </div>
+                                        <input type="text" id="c_group" class="w-full border border-gray-300 rounded p-2 text-sm font-medium text-navy focus:border-gold outline-none bg-blue-50" readonly placeholder="ผลลัพธ์กลุ่มสาระ (แสดงคั่นด้วย ,)">
+                                    </div>
+                                    
+                                    <!-- ครูผู้สอน -->
+                                    <div class="flex flex-col h-full">
+                                        <label class="block font-bold mb-2 text-navy border-b pb-2">2. ครูผู้สอน <span class="text-xs text-gray-500 font-normal">(แสดงตามกลุ่มสาระที่เลือก)</span></label>
+                                        <div class="flex-1 max-h-40 overflow-y-auto border border-gray-200 rounded p-2 mb-3 bg-gray-50" id="teacher_checkbox_list">
+                                            ${teacherCheckboxHtml}
+                                        </div>
+                                        <div class="flex gap-2 mb-2">
+                                            <button type="button" onclick="window.applySelectedTeachers()" class="flex-1 bg-green-600 text-white px-3 py-2 rounded text-sm shadow hover:bg-green-700 transition font-bold"><i class="fas fa-plus"></i> เพิ่มลงฟอร์ม</button>
+                                            <button type="button" onclick="window.clearSelectedTeachers()" class="bg-red-500 text-white px-3 py-2 rounded text-sm shadow hover:bg-red-600 transition" title="ล้างค่า"><i class="fas fa-eraser"></i> ล้าง</button>
+                                        </div>
+                                        <input type="text" id="c_teacher" class="w-full border border-gray-300 rounded p-2 text-sm font-medium text-navy focus:border-gold outline-none bg-blue-50" readonly placeholder="ผลลัพธ์ครูผู้สอน (แสดงคั่นด้วย ,)">
+                                    </div>
                                 </div>
                                 
                                 <div class="bg-gray-50 p-4 rounded border border-gray-200 mb-4">
@@ -1122,6 +1168,63 @@
                 }
             };
 
+            // ฟังก์ชันอัปเดตรายชื่อครูในฟอร์มเมื่อมีการคลิกกลุ่มสาระ
+            window.updateModalTeacherCheckboxes = () => {
+                const checkedGroups = Array.from(document.querySelectorAll('.chk-group:checked')).map(cb => cb.value);
+                let filteredTeachers = window.allTeachersList;
+                
+                if (checkedGroups.length > 0) {
+                    filteredTeachers = window.allTeachersList.filter(t => {
+                        let tGroup = String(t['กลุ่มสาระการเรียนรู้'] || '').trim();
+                        return checkedGroups.includes(tGroup);
+                    });
+                }
+                
+                const teacherListContainer = document.getElementById('teacher_checkbox_list');
+                
+                if(filteredTeachers.length === 0) {
+                    teacherListContainer.innerHTML = '<div class="text-center text-gray-400 text-xs py-4">ไม่พบครูในกลุ่มสาระที่เลือก</div>';
+                } else {
+                    teacherListContainer.innerHTML = filteredTeachers.map(t => {
+                        let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
+                        return `
+                        <label class="flex items-center space-x-2 mb-1.5 cursor-pointer hover:bg-gray-100 p-1.5 rounded transition border border-transparent hover:border-gray-200">
+                            <input type="checkbox" value="${cleanName}" class="chk-teacher w-4 h-4 text-gold border-gray-300 rounded focus:ring-gold">
+                            <span class="text-sm font-medium text-gray-700">${cleanName}</span>
+                        </label>
+                        `;
+                    }).join('');
+                }
+                
+                // รักษาข้อมูลที่เคยติ๊กเลือกไว้
+                const currentSelectedTeachers = document.getElementById('c_teacher').value.split(',').map(s=>s.trim()).filter(s=>s);
+                document.querySelectorAll('.chk-teacher').forEach(cb => {
+                    if (currentSelectedTeachers.includes(cb.value)) cb.checked = true;
+                });
+            };
+
+            window.applySelectedGroups = () => {
+                const checkedGroups = Array.from(document.querySelectorAll('.chk-group:checked')).map(cb => cb.value);
+                document.getElementById('c_group').value = checkedGroups.join(', ');
+                window.updateModalTeacherCheckboxes();
+            };
+
+            window.clearSelectedGroups = () => {
+                document.querySelectorAll('.chk-group').forEach(cb => cb.checked = false);
+                document.getElementById('c_group').value = '';
+                window.updateModalTeacherCheckboxes();
+            };
+
+            window.applySelectedTeachers = () => {
+                const checkedTeachers = Array.from(document.querySelectorAll('.chk-teacher:checked')).map(cb => cb.value);
+                document.getElementById('c_teacher').value = checkedTeachers.join(', ');
+            };
+
+            window.clearSelectedTeachers = () => {
+                document.querySelectorAll('.chk-teacher').forEach(cb => cb.checked = false);
+                document.getElementById('c_teacher').value = '';
+            };
+
             window.openCourseModal = () => {
                 document.getElementById('courseForm').reset();
                 document.getElementById('c_id').value = '';
@@ -1129,7 +1232,10 @@
                 document.getElementById('c_term').value = window.courseCurrentTerm; 
                 document.querySelectorAll('.room-chk').forEach(chk => chk.checked = false); 
                 document.querySelectorAll('.modal-plan-chk').forEach(chk => chk.checked = false);
-                window.updateModalTeacherList();
+                
+                // คืนค่าเริ่มต้นส่วนกลุ่มสาระและครูให้ว่างเปล่า
+                window.clearSelectedGroups();
+                window.clearSelectedTeachers();
                 
                 document.getElementById('courseModalTitle').innerText = 'เพิ่มอัตรากำลังรายวิชา';
                 document.getElementById('batch_add_controls').classList.remove('hidden');
@@ -1193,7 +1299,7 @@
                 const credit = document.getElementById('c_credit').value.trim();
                 const teacher = document.getElementById('c_teacher').value.trim();
                 const term = document.getElementById('c_term').value;
-                const group = document.getElementById('c_group').value;
+                const group = document.getElementById('c_group').value.trim();
                 const level = document.getElementById('c_level').value.trim();
                 
                 const plans = Array.from(document.querySelectorAll('.modal-plan-chk:checked')).map(c => c.value).join(', ');
@@ -1285,11 +1391,11 @@
                     'รหัสวิชา': document.getElementById('c_code').value.trim(), 
                     'ชื่อวิชา': document.getElementById('c_name').value.trim(),
                     'หน่วยกิต': document.getElementById('c_credit').value.trim(), 
-                    'ชื่อครูผู้สอน': document.getElementById('c_teacher').value,
+                    'ชื่อครูผู้สอน': document.getElementById('c_teacher').value.trim(),
                     'ชั้นที่เปิดสอน': document.getElementById('c_level').value.trim(), 
                     'แผนการเรียน': plans,
                     'ภาคเรียนที่': document.getElementById('c_term').value, 
-                    'กลุ่มสาระการเรียนรู้': document.getElementById('c_group').value
+                    'กลุ่มสาระการเรียนรู้': document.getElementById('c_group').value.trim()
                 };
                 
                 if(!data['รหัสวิชา'] || !data['ชื่อวิชา']) {
@@ -1391,18 +1497,26 @@
                 document.getElementById('c_credit').value = String(data['หน่วยกิต'] || '').trim();
                 
                 document.getElementById('c_term').value = String(data['ภาคเรียนที่'] || '').trim();
-                document.getElementById('c_group').value = String(data['กลุ่มสาระการเรียนรู้'] || '').trim();
                 
-                window.updateModalTeacherList();
+                // คืนค่าและติ๊กเช็คบ็อกซ์ "กลุ่มสาระ"
+                let groupStr = String(data['กลุ่มสาระการเรียนรู้'] || '').trim();
+                document.getElementById('c_group').value = groupStr;
+                let selectedGroups = groupStr.split(',').map(s=>s.trim()).filter(s=>s);
+                document.querySelectorAll('.chk-group').forEach(cb => {
+                    cb.checked = selectedGroups.includes(cb.value);
+                });
                 
-                let teacherName = String(data['ชื่อครูผู้สอน'] || '').trim();
-                let teacherSelect = document.getElementById('c_teacher');
-                teacherSelect.value = teacherName;
+                // อัปเดตรายชื่อครูในลิสต์ตามกลุ่มที่เลือก
+                window.updateModalTeacherCheckboxes();
                 
-                if (teacherSelect.value !== teacherName && teacherName !== '') {
-                    teacherSelect.add(new Option(teacherName, teacherName));
-                    teacherSelect.value = teacherName;
-                }
+                // คืนค่าและติ๊กเช็คบ็อกซ์ "ครูผู้สอน"
+                let teacherStr = String(data['ชื่อครูผู้สอน'] || '').trim();
+                document.getElementById('c_teacher').value = teacherStr;
+                let selectedTeachers = teacherStr.split(',').map(s=>s.trim()).filter(s=>s);
+                
+                document.querySelectorAll('.chk-teacher').forEach(cb => {
+                    cb.checked = selectedTeachers.includes(cb.value);
+                });
                 
                 document.getElementById('c_level').value = String(data['ชั้นที่เปิดสอน'] || data['ชั้นที่สอน'] || '').trim();
                 
@@ -1429,6 +1543,7 @@
                 document.getElementById('btn_save_edit').classList.add('hidden'); 
             }
             
+            // ฟังก์ชันสำหรับ Dropdown ตัวกรองการค้นหาด้านบน (ไม่มีการเปลี่ยนแปลง)
             window.updateFilterTeacherList = () => {
                 const filterGroup = document.getElementById('filter_c_group').value;
                 const teacherSelect = document.getElementById('filter_c_teacher');
@@ -1448,26 +1563,6 @@
                     teacherSelect.value = 'all';
                 }
                 window.filterCourseTable();
-            };
-
-            window.updateModalTeacherList = () => {
-                const group = document.getElementById('c_group').value;
-                const teacherSelect = document.getElementById('c_teacher');
-                const currentTeacher = teacherSelect.value;
-
-                let filteredTeachers = group ? window.allTeachersList.filter(t => t['กลุ่มสาระการเรียนรู้'] === group) : window.allTeachersList;
-                
-                teacherSelect.innerHTML = '<option value="">เลือก...</option>' + 
-                    filteredTeachers.map(t => {
-                        let cleanName = String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim();
-                        return `<option value="${cleanName}">${cleanName}</option>`;
-                    }).join('');
-                    
-                if (filteredTeachers.some(t => String(t['ชื่อ-สกุล'] || '').replace(/\s+/g, ' ').trim() === currentTeacher)) {
-                    teacherSelect.value = currentTeacher;
-                } else {
-                    teacherSelect.value = '';
-                }
             };
 
             window.filterCourseTable = () => {
