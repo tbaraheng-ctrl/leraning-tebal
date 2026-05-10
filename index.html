@@ -2845,6 +2845,7 @@
                 const roomData = window.scheduleBaseData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
                 let scheduledCounts = {};
                 roomData.forEach(slot => {
+                    if (slot['ประเภท'] === 'ล็อค') return; // [แก้ไข] ไม่นำวิชาล๊อคมาคำนวณในโควตา
                     let code = String(slot['รหัสวิชา'] || '').trim();
                     if (existingData && slot.originalIndex === existingData.originalIndex) return; 
                     if (!scheduledCounts[code]) scheduledCounts[code] = 0;
@@ -2873,6 +2874,7 @@
                     window.scheduleBaseData.forEach(slot => {
                         if (dayChks.includes(slot['วัน']) && periodChks.includes(parseInt(slot['คาบที่']))) {
                             if (existingData && slot.originalIndex === existingData.originalIndex) return;
+                            if (slot['ประเภท'] === 'ล็อค') return; // [แก้ไข] อนุโลมวิชาล๊อคไม่ให้ติดสถานะครูไม่ว่าง
                             if (slot['ชื่อครูผู้สอน']) {
                                 String(slot['ชื่อครูผู้สอน']).split(',').forEach(t => busyTeachers.add(t.replace(/\s+/g, '')));
                             }
@@ -2917,6 +2919,7 @@
                     window.scheduleBaseData.forEach(slot => {
                         if (dayChks.includes(slot['วัน']) && periodChks.includes(parseInt(slot['คาบที่']))) {
                             if (existingData && slot.originalIndex === existingData.originalIndex) return;
+                            if (slot['ประเภท'] === 'ล็อค') return; // [แก้ไข] อนุโลมสถานที่เรียนที่ติดวิชาล๊อค
                             let loc = String(slot['สถานที่เรียน'] || '').trim();
                             if (loc && loc !== '-') busyLocations.add(loc);
                         }
@@ -3274,6 +3277,7 @@
                             for (let i = 0; i < allDataToCheck.length; i++) {
                                 let s = allDataToCheck[i];
                                 if (isEdit && rowId !== null && String(s.originalIndex) === String(rowId)) continue;
+                                if (s['ประเภท'] === 'ล็อค') continue; // [แก้ไข] ไม่นำวิชาล๊อคมานับรวมอัตรากำลัง
                                 if (s['ห้องเรียน'] === pair.room && s['แผนการเรียน'] === pair.plan && s['รหัสวิชา'] === code) {
                                     currentCourseCount++;
                                 }
@@ -3296,6 +3300,7 @@
                             periodChks.forEach(p => {
                                 allDataToCheck.forEach(slot => {
                                     if (isEdit && rowId !== null && String(slot.originalIndex) === String(rowId)) return;
+                                    if (slot['ประเภท'] === 'ล็อค') return; // [แก้ไข] อนุโลมไม่เช็คชนสำหรับวิชาล๊อค
 
                                     if (slot['วัน'] === d && parseInt(slot['คาบที่']) === p) {
                                         let sTeacher = String(slot['ชื่อครูผู้สอน'] || '').trim();
@@ -3750,7 +3755,7 @@
 
         function renderLock(container) { renderScheduleBase(container, true); }
         
-        // 5. จัดทำตารางสอน ---
+        // // 5. จัดทำตารางสอน ---
         async function renderCreateTable(container) {
             let [dataList, courses, settingsArr, teachersArr, permArr] = await Promise.all([
                 getCachedData('กำหนดตารางสอน'),
@@ -4439,8 +4444,13 @@
                         else return matchPlan;
                     });
 
-                    // คำนวณจำนวนคาบที่จัดไปแล้วของห้องและแผนการเรียนนี้
-                    let targetData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
+                    // [แก้ไข] ดึงข้อมูลคาบที่จัดไปแล้วของห้องและแผนการเรียนนี้ (รองรับแผนที่รวมกันด้วยลูกน้ำ)
+                    let targetData = window.interactiveSchData.filter(d => {
+                        if (d['ห้องเรียน'] !== room) return false;
+                        let dPlans = String(d['แผนการเรียน'] || '').split(',').map(p => p.trim());
+                        return dPlans.includes(plan);
+                    });
+                    
                     let scheduledCounts = {};
                     targetData.forEach(slot => {
                         let code = String(slot['รหัสวิชา'] || '').trim();
@@ -4676,11 +4686,15 @@
                 if (window.interactiveViewMode === 'student') {
                     if (!room || !plan) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกระดับชั้น/ห้อง และ แผนการเรียน ก่อน', 'warning');
                     titleText = 'ตารางสอนห้อง ' + room + ' (แผนฯ: ' + plan + ')';
-                    targetData = window.interactiveSchData.filter(d => d['ห้องเรียน'] === room && d['แผนการเรียน'] === plan);
+                    // [แก้ไข] รองรับการค้นหาคาบที่แผนการเรียนตรงกัน (แม้จะเซฟรวมกันเป็น "วิทย์, คณิต" ก็ตาม)
+                    targetData = window.interactiveSchData.filter(d => {
+                        if (d['ห้องเรียน'] !== room) return false;
+                        let dPlans = String(d['แผนการเรียน'] || '').split(',').map(p => p.trim());
+                        return dPlans.includes(plan);
+                    });
                 } else {
                     if (!teacher) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกครูผู้สอนก่อน', 'warning');
                     titleText = 'ตารางสอนของ ' + teacher;
-                    // แก้ไข: ให้ค้นหาชื่อครูจากรายการที่คั่นด้วยลูกน้ำ และลบช่องว่างออกก่อนเทียบ
                     let targetTeacherMatch = String(teacher).replace(/\s+/g, '');
                     targetData = window.interactiveSchData.filter(d => {
                         let tList = String(d['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
@@ -4697,7 +4711,6 @@
                 let startParts = (window.interactiveSettings?.start || '08:30').split(':');
                 let currentTimeMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
 
-                // ดึงค่าสีที่ตั้งไว้ (ถ้าไม่มีให้ใช้ค่าเริ่มต้น)
                 let c_th_bg = window.interactiveSettings?.color_th_bg || '#1A2942';
                 let c_th_text = window.interactiveSettings?.color_th_text || '#ffffff';
                 let c_day_bg = window.interactiveSettings?.color_day_bg || '#F3E5AB';
@@ -5096,7 +5109,6 @@
                     if (!matchTerm) return false;
                     
                     if (window.interactiveViewMode === 'teacher') {
-                        // แก้ไข: รองรับการเช็คชื่อครูในวิชาที่สอนคู่กัน
                         let cTeachers = String(c['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
                         if (!cTeachers.includes(currentTeacherMatch)) return false;
                         if (room) {
@@ -5141,9 +5153,11 @@
                 let scheduledCounts = {};
                 let roomData = [];
                 if (window.interactiveViewMode === 'student') {
-                    // หากมีการติ๊กหลายแผนการเรียนในหน้าจอ ให้ตรวจสอบว่าข้อมูลนั้นอยู่ในแผนใดๆ ที่กำลังเลือกหรือไม่
+                    // [แก้ไข] ดึงข้อมูลคาบที่จัดไปแล้วของห้องและแผนการเรียนนี้ (รองรับแผนที่รวมกันด้วยลูกน้ำ)
                     roomData = window.interactiveSchData.filter(d => {
-                        return d['ห้องเรียน'] === room && selectedPlans.includes(d['แผนการเรียน']);
+                        if (d['ห้องเรียน'] !== room) return false;
+                        let dPlans = String(d['แผนการเรียน'] || '').split(',').map(p => p.trim());
+                        return selectedPlans.some(p => dPlans.includes(p));
                     });
                     roomData.forEach(slot => {
                         let code = String(slot['รหัสวิชา'] || '').trim();
@@ -5152,7 +5166,6 @@
                         scheduledCounts[code]++;
                     });
                 } else {
-                    // แก้ไข: นับคาบของครูรายคน (รองรับสอนคู่)
                     roomData = window.interactiveSchData.filter(d => {
                         let dTeachers = String(d['ชื่อครูผู้สอน'] || '').split(',').map(t => t.replace(/\s+/g, ''));
                         return dTeachers.includes(currentTeacherMatch);
@@ -5226,8 +5239,6 @@
                 window.autoFillModalCourse(false); // เรียกใช้งานแบบไม่บังคับทับเช็คบ๊อคซ์
                 
                 let allLocations = (window.interactiveSettings.teaching_rooms || '').split(',').map(r => r.trim()).filter(r => r);
-                
-                // [แก้ไข] เปลี่ยนจากการเก็บแค่ชื่อสถานที่ เป็นเก็บสาเหตุด้วย
                 let busyLocationsInfo = {};
                 
                 window.interactiveSchData.forEach(slot => {
@@ -5241,7 +5252,6 @@
                             let shortTeacher = teacherName.split(',').map(name => name.trim().replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim().split(' ')[0]).filter(n => n).join(', ');
                             let displayRoom = slot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : `ชั้น ${slot['ห้องเรียน']}`;
                             
-                            // [แก้ไข] เพิ่มการแสดง วัน และ ชื่อวิชา เข้าไปในข้อความแจ้งเตือน
                             busyLocationsInfo[loc].push(`<div class="mb-1 border-b border-red-100 pb-1 last:border-0 last:pb-0 last:mb-0">- วัน${slot['วัน']} คาบ ${slot['คาบที่']}: <b>${slot['รหัสวิชา']} ${slot['ชื่อวิชา'] || ''}</b><br><span class="text-xs text-gray-500">(${displayRoom} | ครู${shortTeacher})</span></div>`);
                         }
                     }
@@ -5290,7 +5300,6 @@
                         groupedLocs[gKey].sort((a, b) => String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: 'base'})).forEach(loc => {
                             let isEditingThisLoc = existingData && existingData['สถานที่เรียน'] === loc;
                             
-                            // [แก้ไข] แสดงปุ่มไม่ว่างแบบกดดูรายละเอียดได้ พร้อมแก้บั๊กเครื่องหมายคำพูด (Quote escaping)
                             if (busyLocationsInfo[loc] && !isEditingThisLoc) {
                                 let conflictText = busyLocationsInfo[loc].join('').replace(/'/g, "\\'").replace(/"/g, '&quot;');
                                 gridHtml += `
@@ -5571,7 +5580,6 @@
                 document.getElementById('schModal').classList.add('hidden');
             };
 
-            // แก้ไขเพิ่มพารามิเตอร์ fromCourseInput ป้องกันการเกิด Loop บังคับติ๊กกลับเมื่อเราพยายามติ๊กออกแบบแมนนวล
             window.autoFillModalCourse = (fromCourseInput = false) => {
                 let code = document.getElementById('m_code').value.trim();
                 let c = window.interactiveCourses.find(x => x['รหัสวิชา'] === code);
@@ -5588,6 +5596,7 @@
                     }
                 }
                 
+                // [แก้ไข] เมื่อพิมพ์รหัสวิชาใหม่ ให้ติ๊กแผนการเรียนอัตโนมัติตามที่มีในฐานข้อมูลรายวิชา
                 if (fromCourseInput && c) {
                     let cRooms = (c['ชั้นที่สอน'] || c['ชั้นที่เปิดสอน'] || '').split(',').map(r => r.trim()).filter(r => r);
                     let cPlans = (c['แผนการเรียน'] || '').split(',').map(p => p.trim()).filter(p => p);
@@ -5599,7 +5608,6 @@
                         }
                     }
 
-                    // อัปเดตเช็คบ็อกซ์แผนการเรียนอัตโนมัติ ตามแผนที่กำหนดไว้ในรายวิชา
                     if (cPlans.length > 0 && !cPlans.includes('-')) {
                         document.querySelectorAll('.m-plan-chk').forEach(chk => {
                             chk.checked = cPlans.includes(chk.value);
@@ -5618,7 +5626,6 @@
                     let itemToDelete = window.interactiveSchData.find(item => String(item.originalIndex) === String(rowIndex));
                     if(!itemToDelete) return Swal.fire('ข้อผิดพลาด', 'ไม่พบข้อมูลที่จะลบ', 'error');
 
-                    // Optimistic Update: ลบจากหน้าจอทันที ไม่ต้องรอโหลด
                     window.interactiveSchData = window.interactiveSchData.filter(item => String(item.originalIndex) !== String(rowIndex));
                     if (window.scheduleBaseData) {
                         window.scheduleBaseData = window.scheduleBaseData.filter(item => String(item.originalIndex) !== String(rowIndex));
@@ -5633,12 +5640,11 @@
                     window.pendingSyncCount++;
                     window.updateSyncStatus();
 
-                    // คลีนข้อมูลก่อนส่ง
                     let cleanData = { ...itemToDelete };
                     delete cleanData.originalIndex;
                     delete cleanData.isPending;
-                    delete cleanData.allRooms;      // เอาออกกรณีโหมดครู
-                    delete cleanData.allTeachers;   // เอาออกกรณีโหมดนักเรียน
+                    delete cleanData.allRooms;
+                    delete cleanData.allTeachers;
 
                     try {
                         await callAPI('deleteData', { sheetName: 'กำหนดตารางสอน', rowData: cleanData, rowIndex: null }, true);
@@ -5664,14 +5670,13 @@
             };
 
             const processSaveDataAsync = async (data, rowId) => {
-                window.isPauseGridRefresh = true; // ระงับการรีเฟรชตารางอัตโนมัติจากเบื้องหลัง
+                window.isPauseGridRefresh = true; 
 
                 let oldItem = null;
                 if (rowId !== null) {
                     let index = window.interactiveSchData.findIndex(item => String(item.originalIndex) === String(rowId));
                     if(index !== -1) {
                         oldItem = { ...window.interactiveSchData[index] };
-                        // แสดงข้อมูลที่แก้ไขใหม่ลงในหน้าจอทันที พร้อมไอคอนหมุน
                         window.interactiveSchData[index] = { ...data, originalIndex: rowId, isPending: true };
                     }
                 } else {
@@ -5693,7 +5698,6 @@
                 }
 
                 try {
-                    // ส่งข้อมูลเก่าไปเทียบเพื่ออัปเดตทับบรรทัดเดิมโดยสมบูรณ์
                     await callAPI('saveData', { sheetName: 'กำหนดตารางสอน', rowId: null, data: data, rowData: cleanOldItem }, true);
                     
                     window.pendingSyncCount--;
@@ -5703,11 +5707,11 @@
                         if (window.interactiveViewMode === 'list') window.filterInteractiveSchList(); else window.refreshSchGrid();
                     }
                     window.updateSyncStatus();
-                    window.isPauseGridRefresh = false; // ปลดล็อกให้ระบบรีเฟรชอัตโนมัติกลับมาทำงานต่อ
+                    window.isPauseGridRefresh = false; 
                 } catch(err) {
                     window.pendingSyncCount--;
                     window.updateSyncStatus();
-                    window.isPauseGridRefresh = false; // ปลดล็อกให้ระบบรีเฟรชอัตโนมัติกลับมาทำงานต่อแม้จะเกิด Error
+                    window.isPauseGridRefresh = false; 
                     Swal.fire('ข้อผิดพลาด', err.message || 'การบันทึกข้อมูลล้มเหลว', 'error');
                     window.forceRefreshSchGrid(true); 
                     throw err; 
@@ -5753,7 +5757,6 @@
                 let currentCourseCount = 0;
                 let isEditAction = (rowId !== null);
 
-                // ปิดการทำงานของระบบเช็คข้อมูลชนทั้งหมด หากเป็นการแก้ไข
                 if (!isEditAction) {
                     for (let i = 0; i < latestData.length; i++) {
                         let s = latestData[i];
@@ -5783,9 +5786,15 @@
                                 let sRoom = String(slot['ห้องเรียน'] || '').trim();
                                 let sPlan = String(slot['แผนการเรียน'] || '').trim();
                                 let sPlanList = sPlan.split(',').map(pl => pl.trim());
-                                let hasCommonPlan = inputPlanList.some(pl => sPlanList.includes(pl));
+                                
+                                // [แก้ไข] ตรวจสอบว่าแผนการเรียนตรงกันหรือไม่
+                                let hasCommonPlan = false;
+                                if (inputPlanList.length === 0 || sPlanList.length === 0) {
+                                    hasCommonPlan = true;
+                                } else {
+                                    hasCommonPlan = inputPlanList.some(pl => sPlanList.includes(pl));
+                                }
 
-                                // อนุญาตให้ห้องเดียวกันแต่คนละแผนการเรียน จัดลงในคาบเดียวกันได้
                                 if (sRoom !== '' && sRoom !== '-' && sRoom === room && !hasCommonPlan) {
                                     return; 
                                 }
@@ -5817,7 +5826,7 @@
                             }
                         });
                     });
-                } // ปิดเงื่อนไข if (!isEditAction) อย่างสมบูรณ์
+                } 
 
                 if (conflictMsg.length > 0) {
                     let confirmSave = await Swal.fire({
@@ -5845,7 +5854,6 @@
 
                 window.closeSchModal(); 
                 
-                // รันแบบเบื้องหลัง (Background Task) โชว์สถานะหมุนเฉพาะในช่องตาราง
                 (async () => {
                     let tempIdx = 0;
                     let hasError = false;
@@ -5859,7 +5867,7 @@
                             'วัน': d, 'คาบที่': p,
                             'รหัสวิชา': code, 'ชื่อวิชา': document.getElementById('m_name').value,
                             'ชื่อครูผู้สอน': teacher, 'สถานที่เรียน': locationVal,
-                            'ประเภท': 'ปกติ', // <--- แก้ไขตรงนี้ให้บันทึกเป็นค่า 'ปกติ' เสมอ
+                            'ประเภท': 'ปกติ', 
                             'ผู้บันทึก': currentUser
                         };
                         const currentRowId = (tempIdx === 0) ? rowId : null;
