@@ -774,6 +774,8 @@
                                     <option value="user">User (ครูผู้สอน)</option>
                                     <option value="head">Head (หัวหน้ากลุ่มสาระ)</option>
                                     <option value="admin">Admin (ผู้ดูแลระบบ)</option>
+                                    <option value="director">Director (ผู้อำนวยการ)</option>
+                                    <option value="deputy_director">Deputy Director (รองผู้อำนวยการ)</option>
                                 </select>
                             </div>
                             <div><label class="block text-sm font-medium mb-1">ชื่อผู้ใช้</label><input type="text" id="t_user" required class="w-full border border-gray-300 rounded p-2 focus:border-gold outline-none"></div>
@@ -5938,6 +5940,26 @@
             let rooms = (settings.rooms || '').split(',').map(r => r.trim()).filter(r => r);
             let plans = learningPlans;
 
+            // แก้ปัญหาโลโก้หายบน PDF โดยการแปลงรูปภาพเป็น Base64 Data URI อัตโนมัติ
+            let rawLogoUrl = settings.logo || 'https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png';
+            window._cachedBase64Logo = window._cachedBase64Logo || rawLogoUrl;
+            if (!window._cachedBase64Logo.startsWith('data:')) {
+                try {
+                    let proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(rawLogoUrl);
+                    let proxyRes = await fetch(proxyUrl);
+                    if (proxyRes.ok) {
+                        let blob = await proxyRes.blob();
+                        window._cachedBase64Logo = await new Promise((resolve) => {
+                            let reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(blob);
+                        });
+                    }
+                } catch(e) {
+                    console.warn('ไม่สามารถแปลงโลโก้เป็น Base64 ได้ จะใช้ลิงก์ภาพปกติแทน', e);
+                }
+            }
+
             // Helper: แปลงข้อความให้ลบเว้นวรรคทั้งหมด เพื่อเปรียบเทียบชื่อครูได้แม่นยำ
             const normalizeStr = (str) => String(str || '').replace(/\s+/g, '');
 
@@ -5970,41 +5992,53 @@
                 });
             }
 
+// ตรวจสอบสิทธิ์ว่าเป็นแอดมิน ผู้อำนวยการ หรือรองผู้อำนวยการ จากตัวแปรระบบโดยตรง
+            let checkRole = String(window.currentRole || currentRole || '').toLowerCase().trim();
+            let isUserAdmin = ['admin', 'director', 'deputy_director'].includes(checkRole);
+
             container.innerHTML = `
                 <div class="mb-4 flex flex-wrap items-center justify-between gap-2">
                      <h3 class="text-xl font-bold text-navy flex items-center">
-                        <i class="fas fa-download mr-2 text-gold"></i> ดาวน์โหลดตารางสอน
+                        <i class="fas fa-download mr-2 text-gold"></i> ดาวน์โหลดตาราง / คาบว่าง
                         <span class="bg-blue-100 text-blue-800 text-sm font-semibold px-3 py-1 rounded-full ml-3 border border-blue-200 shadow-sm">ภาคเรียนที่ ${currentTerm}/${currentYear}</span>
                     </h3>
                 </div>
-                <div class="bg-white p-5 rounded-xl shadow-md mb-4 flex flex-col lg:flex-row gap-4 items-end">
+                <div class="bg-white p-5 rounded-xl shadow-md mb-4 flex flex-col lg:flex-row gap-4 items-end flex-wrap">
                     
-                    <div class="flex-1 w-full">
+                    <div class="flex-1 min-w-[150px]">
                         <label class="block text-xs font-medium text-gray-600 mb-1">ประเภทตาราง</label>
                         <select id="dl_type" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition" onchange="toggleDlSelectors()">
                             <option value="student">ตารางเรียน (นักเรียน)</option>
                             <option value="teacher">ตารางสอน (ครู)</option>
+                            <option value="free_student">คาบว่าง (นักเรียน)</option>
+                            ${isUserAdmin ? '<option value="free_teacher">คาบว่าง (ครู)</option>' : ''}
                         </select>
                     </div>
                     
-                    <div id="wrapper_dl_room" class="flex-1 w-full">
-                        <label class="block text-xs font-medium text-gray-600 mb-1">ชั้น/ห้อง</label>
-                        <select id="dl_room" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition">
-                            <option value="">-- เลือกห้องเรียน --</option>
-                            <option value="all">ทุกชั้น/ห้อง</option>
-                            ${rooms.map(r => `<option value="${r}">${r}</option>`).join('')}
+                    <div id="wrapper_dl_grade" class="flex-1 min-w-[120px]">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">ระดับชั้น</label>
+                        <select id="dl_grade" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition" onchange="updateRoomOptions()">
+                            <option value="all">ทุกระดับชั้น</option>
+                            <option value="1">ม.1</option><option value="2">ม.2</option><option value="3">ม.3</option>
+                            <option value="4">ม.4</option><option value="5">ม.5</option><option value="6">ม.6</option>
                         </select>
                     </div>
 
-                    <div id="wrapper_dl_plan" class="flex-1 w-full">
+                    <div id="wrapper_dl_room_num" class="flex-1 min-w-[100px]">
+                        <label class="block text-xs font-medium text-gray-600 mb-1">ห้อง</label>
+                        <select id="dl_room_num" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition" onchange="updatePlanOptions()">
+                            <option value="all">ทุกห้อง</option>
+                        </select>
+                    </div>
+
+                    <div id="wrapper_dl_plan" class="flex-1 min-w-[150px]">
                         <label class="block text-xs font-medium text-gray-600 mb-1">แผนการเรียน</label>
                         <select id="dl_plan" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition">
                             <option value="all">ทุกแผนการเรียน</option>
-                            ${plans.map(p => `<option value="${p}">${p}</option>`).join('')}
                         </select>
                     </div>
 
-                    <div id="wrapper_dl_group" class="flex-1 w-full hidden">
+                    <div id="wrapper_dl_group" class="flex-1 min-w-[150px] hidden">
                         <label class="block text-xs font-medium text-gray-600 mb-1">กลุ่มสาระการเรียนรู้</label>
                         <select id="dl_group" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition" onchange="updateTeacherOptions()">
                             <option value="all">ทุกกลุ่มสาระ</option>
@@ -6012,7 +6046,7 @@
                         </select>
                     </div>
 
-                    <div id="wrapper_dl_teacher" class="flex-1 w-full hidden">
+                    <div id="wrapper_dl_teacher" class="flex-1 min-w-[150px] hidden">
                         <label class="block text-xs font-medium text-gray-600 mb-1">ครูผู้สอน</label>
                         <select id="dl_teacher" class="border border-gray-300 focus:border-gold outline-none p-2 rounded-lg text-sm w-full transition">
                             <option value="all">ทุกคนในกลุ่มสาระ</option>
@@ -6021,9 +6055,9 @@
                     </div>
 
                     <div class="flex flex-wrap gap-2 w-full lg:w-auto mt-2 lg:mt-0">
-                        <button onclick="previewTimetable()" class="bg-navy text-white px-4 py-2 rounded-lg hover:bg-opacity-90 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-search mr-2"></i> แสดงตาราง</button>
-                        <button onclick="printTimetable()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-file-pdf mr-2"></i> ดาวน์โหลด PDF / พิมพ์</button>
-                        <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-image mr-2"></i> ดาวน์โหลด JPG</button>
+                        <button onclick="previewTimetable()" class="bg-navy text-white px-4 py-2 rounded-lg hover:bg-opacity-90 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-search mr-2"></i> แสดงผล</button>
+                        <button onclick="printTimetable()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-file-pdf mr-2"></i> โหลด PDF/พิมพ์</button>
+                        <button onclick="downloadAsJPG()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 h-[38px] flex items-center justify-center text-sm flex-1 lg:flex-none shadow-sm transition"><i class="fas fa-image mr-2"></i> โหลด JPG</button>
                         <button onclick="forceRefreshDownload()" class="bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 h-[38px] flex items-center justify-center text-sm shadow-sm transition" title="ดึงข้อมูลล่าสุดจากระบบ"><i class="fas fa-sync-alt"></i></button>
                     </div>
 
@@ -6034,21 +6068,118 @@
                     <!-- ใช้ min-w-[1050px] เพื่อป้องกันปัญหาตารางโดนตัดขอบด้านซ้ายเมื่อดูผ่านหน้าจอขนาดเล็ก -->
                     <div id="timetableCanvas" class="flex flex-col gap-8 items-center min-w-[1050px] w-full py-4 mx-auto">
                         <div class="bg-white p-8 w-[1000px] shadow-lg relative text-center text-gray-400 mt-10 rounded-xl">
-                            <i class="fas fa-table text-4xl mb-2"></i><br>กรุณาเลือกตารางและกดแสดงตาราง
+                            <i class="fas fa-table text-4xl mb-2"></i><br>กรุณาเลือกตาราง/คาบว่างและกดแสดงผล
                         </div>
                     </div>
                 </div>
             `;
 
+            window._currentRooms = rooms;
+            window._currentProcessedData = processedData;
+
+            // 1. ฟังก์ชันอัปเดตตัวเลือก 'ห้อง' (คัดกรองเฉพาะห้องที่มีข้อมูลลงตารางเรียนจริงๆ)
+            window.updateRoomOptions = () => {
+                const selectedGrade = document.getElementById('dl_grade').value;
+                const roomSelect = document.getElementById('dl_room_num');
+                
+                let availableRoomNums = new Set();
+                
+                // ค้นหาจากข้อมูลที่ประมวลผลแล้ว (มั่นใจว่ามีตารางเรียนชัวร์ๆ)
+                Object.keys(window._currentProcessedData.student).forEach(r => {
+                    let matchGrade = false;
+                    if (selectedGrade === 'all') {
+                        matchGrade = true;
+                    } else if (r.startsWith('ม.' + selectedGrade + '/') || r === 'ม.' + selectedGrade) {
+                        matchGrade = true;
+                    }
+                    
+                    if (matchGrade) {
+                        let parts = r.split('/');
+                        if (parts.length > 1) {
+                            availableRoomNums.add(parts[1]);
+                        }
+                    }
+                });
+                
+                let optionsHtml = '<option value="all">ทุกห้อง</option>';
+                let sortedNums = Array.from(availableRoomNums).filter(n => n !== '').sort((a,b) => parseInt(a) - parseInt(b));
+                sortedNums.forEach(num => {
+                    optionsHtml += `<option value="${num}">${num}</option>`;
+                });
+                
+                roomSelect.innerHTML = optionsHtml;
+                window.updatePlanOptions(); // โหลดแผนการเรียนต่ออัตโนมัติ
+            };
+
+            // 2. ฟังก์ชันอัปเดตตัวเลือก 'แผนการเรียน' ให้ดึงเฉพาะแผนที่มีการลงรายวิชาในห้องนั้น
+            window.updatePlanOptions = () => {
+                const selectedGrade = document.getElementById('dl_grade').value;
+                const selectedRoomNum = document.getElementById('dl_room_num').value;
+                const planSelect = document.getElementById('dl_plan');
+                
+                let availablePlans = new Set();
+                
+                // ค้นหาแผนการเรียนเฉพาะที่สอดคล้องกับชั้นและห้องที่เลือก
+                Object.keys(window._currentProcessedData.student).forEach(r => {
+                    let matchGrade = false;
+                    if (selectedGrade === 'all') {
+                        matchGrade = true;
+                    } else if (r.startsWith('ม.' + selectedGrade + '/') || r === 'ม.' + selectedGrade) {
+                        matchGrade = true;
+                    }
+
+                    let parts = r.split('/');
+                    let rNum = parts.length > 1 ? parts[1] : '';
+                    let matchNum = (selectedRoomNum === 'all') || (rNum === selectedRoomNum);
+                    
+                    if (matchGrade && matchNum) {
+                        let roomData = window._currentProcessedData.student[r] || [];
+                        roomData.forEach(slot => {
+                            let rawPlan = slot['แผนการเรียน'] || '-';
+                            // แยกข้อมูลที่คั่นด้วยลูกน้ำ เพื่อให้แสดงแผนการเรียนเดี่ยวๆ
+                            let planList = rawPlan.split(',').map(p => p.trim()).filter(p => p);
+                            if (planList.length === 0) planList = ['-'];
+                            planList.forEach(p => availablePlans.add(p));
+                        });
+                    }
+                });
+                
+                let sortedPlans = Array.from(availablePlans).sort();
+                let optionsHtml = '';
+                
+                if (sortedPlans.length === 0) {
+                    optionsHtml = '<option value="all">ไม่มีข้อมูลแผนการเรียน</option>';
+                } else if (sortedPlans.length === 1) {
+                    // หาก 1 ห้อง มี 1 แผนการเรียน ให้แสดงอัตโนมัติ ไม่ต้องมี 'ทุกแผนการเรียน'
+                    let p = sortedPlans[0];
+                    let pText = p === '-' ? 'ทั่วไป' : p;
+                    optionsHtml = `<option value="${p}" selected>${pText}</option>`;
+                } else {
+                    // หากมีมากกว่า 1 ให้แสดงทั้งหมด (มีตัวเลือก "ทุกแผนการเรียน" เป็นค่าตั้งต้น)
+                    optionsHtml = '<option value="all">ทุกแผนการเรียน</option>';
+                    sortedPlans.forEach(p => {
+                        let pText = p === '-' ? 'ทั่วไป' : p;
+                        optionsHtml += `<option value="${p}">${pText}</option>`;
+                    });
+                }
+                
+                planSelect.innerHTML = optionsHtml;
+            };
+
             window.toggleDlSelectors = () => {
                 const type = document.getElementById('dl_type').value;
-                if(type === 'student') {
-                    document.getElementById('wrapper_dl_room').classList.remove('hidden');
+                const isStudentMode = type === 'student' || type === 'free_student';
+                
+                if(isStudentMode) {
+                    document.getElementById('wrapper_dl_grade').classList.remove('hidden');
+                    document.getElementById('wrapper_dl_room_num').classList.remove('hidden');
                     document.getElementById('wrapper_dl_plan').classList.remove('hidden');
                     document.getElementById('wrapper_dl_group').classList.add('hidden');
                     document.getElementById('wrapper_dl_teacher').classList.add('hidden');
+                    if(window.updateDlSelectorsDynamic) window.updateDlSelectorsDynamic();
                 } else {
-                    document.getElementById('wrapper_dl_room').classList.add('hidden');
+                    document.getElementById('wrapper_dl_grade').classList.add('hidden');
+                    document.getElementById('wrapper_dl_room_num').classList.add('hidden');
                     document.getElementById('wrapper_dl_plan').classList.add('hidden');
                     document.getElementById('wrapper_dl_group').classList.remove('hidden');
                     document.getElementById('wrapper_dl_teacher').classList.remove('hidden');
@@ -6083,122 +6214,44 @@
                 });
             };
 
+            // เรียกใช้งานเพื่อตั้งค่าตั้งต้นเมื่อเปิดหน้า
+            window.updateRoomOptions();
+
             window.previewTimetable = () => {
                 const type = document.getElementById('dl_type').value;
-                let tablesToRender = []; // เก็บข้อมูลแต่ละตารางแยกกัน
+                let tablesToRender = []; // เก็บข้อมูลแต่ละตารางแยกกัน สำหรับตารางเรียน/สอน
+                let allHtml = ''; // สำหรับเก็บ HTML ที่วาดตรง (เช่น คาบว่าง)
 
-                if (type === 'student') {
-                    const selectedRoom = document.getElementById('dl_room').value;
-                    const selectedPlan = document.getElementById('dl_plan').value;
-                    
-                    if (!selectedRoom) return Swal.fire('แจ้งเตือน', 'กรุณาเลือกชั้น/ห้อง', 'warning');
-
-                    // 1. ดึงข้อมูลห้องที่จะนำมาแสดง
-                    let roomsToProcess = selectedRoom === 'all' ? Object.keys(processedData.student) : (processedData.student[selectedRoom] ? [selectedRoom] : []);
-
-                    roomsToProcess.forEach(roomKey => {
-                        let roomData = processedData.student[roomKey] || [];
-                        
-                        // 2. จัดกลุ่มข้อมูลในแต่ละห้องตาม 'แผนการเรียน'
-                        let planGroups = {};
-                        roomData.forEach(slot => {
-                            let plan = slot['แผนการเรียน'] || '-';
-                            if (!planGroups[plan]) planGroups[plan] = [];
-                            planGroups[plan].push(slot);
-                        });
-
-                        // 3. กรองตามแผนการเรียนที่เลือกใน Select (ถ้าไม่ได้เลือกทุกแผน)
-                        let plansToProcess = Object.keys(planGroups);
-                        if (selectedPlan !== 'all') {
-                            plansToProcess = plansToProcess.filter(p => p === selectedPlan);
-                        }
-
-                        // 4. นำเข้าตารางที่จะวาดแยกกัน
-                        plansToProcess.forEach(planKey => {
-                            let pText = planKey === '-' ? 'ทั่วไป' : planKey;
-                            tablesToRender.push({
-                                type: 'student',
-                                subtitle: `ชั้น/ห้อง: ${roomKey} &nbsp;|&nbsp; แผนการเรียน: ${pText}`,
-                                scheduleMap: planGroups[planKey],
-                                sortKey: roomKey + planKey
-                            });
-                        });
-                    });
-
-                } else {
-                    const selectedGroup = document.getElementById('dl_group').value;
-                    const selectedTeacher = document.getElementById('dl_teacher').value;
-
-                    // สร้าง Lookup สำหรับหากลุ่มสาระของครู (คีย์เป็นชื่อมาตรฐานแล้ว)
-                    const teacherGroupMap = {};
-                    teachers.forEach(t => {
-                        teacherGroupMap[t['ชื่อ-สกุล']] = t['กลุ่มสาระการเรียนรู้'];
-                    });
-
-                    let teachersToProcess = [];
-
-                    if (selectedTeacher !== 'all') {
-                        if (processedData.teacher[selectedTeacher]) {
-                            teachersToProcess = [selectedTeacher];
-                        }
-                    } else {
-                        // เลือก "ทุกคนในกลุ่มสาระ"
-                        teachersToProcess = Object.keys(processedData.teacher).filter(teacherKey => {
-                            if (selectedGroup === 'all') return true;
-                            let tGroup = teacherGroupMap[teacherKey];
-                            return tGroup === selectedGroup;
-                        });
-                    }
-
-                    if (teachersToProcess.length === 0) {
-                        document.getElementById('timetableCanvas').innerHTML = `
-                            <div class="bg-white p-8 w-[1000px] shadow-lg relative text-center text-gray-400 mt-10 rounded-xl">
-                                <i class="fas fa-search text-4xl mb-2"></i><br>ไม่พบข้อมูลตารางสอนของครูในกลุ่มสาระที่เลือก
-                                <p class="text-sm mt-3 text-red-400">*หากท่านเพิ่งจัดตารางสอนเสร็จ กรุณาไปที่เมนู <b>"ประมวลผลตารางสอน"</b> ก่อนกดดูตารางครับ</p>
-                            </div>
-                        `;
-                        return Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลตารางสอน (อาจยังไม่ได้ประมวลผล หรือไม่มีคาบสอน)', 'info');
-                    }
-
-                    teachersToProcess.forEach(teacherKey => {
-                        let tGroup = teacherGroupMap[teacherKey] || 'ไม่ระบุกลุ่มสาระ';
-                        let scheduleMap = processedData.teacher[teacherKey] || [];
-                        
-                        // คำนวณจำนวนคาบต่อสัปดาห์ (นับเฉพาะคาบที่ไม่ซ้ำกัน เผื่อกรณีสอนควบห้องในคาบเดียวกัน)
-                        let uniquePeriods = new Set(scheduleMap.map(s => s['วัน'] + '_' + s['คาบที่'])).size;
-
-                        tablesToRender.push({
-                            type: 'teacher',
-                            subtitle: `ครูผู้สอน: ${teacherKey} &nbsp;|&nbsp; กลุ่มสาระฯ: ${tGroup} &nbsp;|&nbsp; รวม: ${uniquePeriods} คาบ/สัปดาห์`,
-                            scheduleMap: scheduleMap,
-                            sortKey: tGroup + '_' + teacherKey // เรียงตามกลุ่มสาระแล้วตามด้วยชื่อครู
-                        });
-                    });
-                }
-                
-                if (tablesToRender.length === 0) {
-                    document.getElementById('timetableCanvas').innerHTML = `
-                        <div class="bg-white p-8 w-[1000px] shadow-lg relative text-center text-gray-400 mt-10 rounded-xl">
-                            <i class="fas fa-search text-4xl mb-2"></i><br>ไม่พบข้อมูลตารางตามเงื่อนไขที่เลือก
-                        </div>
-                    `;
-                    return Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลตารางตามเงื่อนไขที่เลือก', 'info');
-                }
-
-                // เรียงลำดับตารางให้เป็นระเบียบตามชื่อห้องและแผน
-                tablesToRender.sort((a,b) => a.sortKey.localeCompare(b.sortKey));
-
-                // คำนวณหาคาบสูงสุดในข้อมูล เผื่อกรณีข้อมูลมีคาบ 9 แต่ตั้งค่าระบบไว้แค่ 8
-                let basePeriods = settings.periods || 8;
+                // คำนวณหาคาบสูงสุดและข้อมูลเวลากลาง
+                let basePeriods = parseInt(settings.periods || 8);
                 let maxPeriod = basePeriods;
-                tablesToRender.forEach(table => {
-                    table.scheduleMap.forEach(d => {
+                if (rawData) {
+                    rawData.forEach(d => {
                         let p = parseInt(d['คาบที่']);
                         if (p > maxPeriod) maxPeriod = p;
                     });
-                });
+                }
+                let breakPeriod = parseInt(settings.break_period || 4);
+                let breakDuration = parseInt(settings.break_duration || 60);
+                let periodDuration = parseInt(settings.duration || 50);
+                let startParts = (settings.start || '08:30').split(':');
+                let initialTimeMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
 
-                // ดึงค่าสีมาใช้ในหน้าดาวน์โหลด
+                // Helper คำนวณเวลาเริ่มต้น-สิ้นสุดของคาบนั้นๆ
+                const getTimeForPeriod = (targetP) => {
+                    let tMin = initialTimeMin;
+                    for(let i=1; i<targetP; i++) {
+                        tMin += (i === breakPeriod) ? breakDuration : periodDuration;
+                    }
+                    let dur = (targetP === breakPeriod) ? breakDuration : periodDuration;
+                    let startStr = Math.floor(tMin/60).toString().padStart(2,'0') + ':' + (tMin%60).toString().padStart(2,'0');
+                    let endStr = Math.floor((tMin+dur)/60).toString().padStart(2,'0') + ':' + ((tMin+dur)%60).toString().padStart(2,'0');
+                    return `${startStr} - ${endStr}`;
+                };
+
+                const daysOfWeek = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
+
+                // ดึงค่าสีมาใช้
                 let c_th_bg = settings.color_th_bg || '#1A2942';
                 let c_th_text = settings.color_th_text || '#ffffff';
                 let c_day_bg = settings.color_day_bg || '#F3E5AB';
@@ -6206,190 +6259,464 @@
                 let c_break_bg = settings.color_break_bg || '#e5e7eb';
                 let c_break_text = settings.color_break_text || '#6b7280';
 
-                // คำนวณเวลาและคาบพักสำหรับสร้างหัวตาราง (เหมือนกันทุกตาราง)
-                let breakPeriod = parseInt(settings.break_period || 4);
-                let breakDuration = parseInt(settings.break_duration || 60);
-                let periodDuration = parseInt(settings.duration || 50);
-                let startParts = (settings.start || '08:30').split(':');
-                let initialTimeMin = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+                // ==========================================
+                // โหมด: ตารางเรียน (นักเรียน) หรือ คาบว่าง (นักเรียน)
+                // ==========================================
+                if (type === 'student' || type === 'free_student') {
+                    const selectedGrade = document.getElementById('dl_grade').value;
+                    const selectedRoomNum = document.getElementById('dl_room_num').value;
+                    const selectedPlan = document.getElementById('dl_plan').value;
 
-                let thsTemplate = '';
-                let currentTimeMinHeader = initialTimeMin;
-                for(let i=1; i<=maxPeriod; i++) {
-                    let isBreak = (i === breakPeriod);
-                    let currentDur = isBreak ? breakDuration : periodDuration;
-                    let startStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
-                    currentTimeMinHeader += currentDur;
-                    let endStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
-                    
-                    let widthClass = isBreak ? 'w-16' : 'w-24';
-                    
-                    thsTemplate += `<th class="border border-navy p-2 ${widthClass} align-middle" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">
-                                คาบ ${i}<br><span class="text-[10px] font-normal opacity-80">${startStr}-${endStr}</span>
-                            </th>`;
-                }
-
-                const days = ['จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์'];
-                let allHtml = '';
-                
-                // วนลูปวาดตารางทีละหน้าตามข้อมูลที่จัดกลุ่มมาได้
-                tablesToRender.forEach((tableData) => {
-                    let trs = '';
-                    days.forEach((day, dayIndex) => {
-                        let tds = '';
-                        let i = 1;
-                        while(i <= maxPeriod) {
-                            if (i === breakPeriod) {
-                                // ผสานเซลล์แนวตั้ง 5 แถว และใช้ CSS Rotate เพื่อทำตัวหนังสือแนวตั้งที่สมบูรณ์แบบ
-                                if (dayIndex === 0) {
-                                    tds += `<td rowspan="5" class="border border-navy p-0 text-center align-middle w-16" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(0,0,0,0.1);">
-                                                <div style="height: 350px; position: relative; width: 100%;">
-                                                    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; letter-spacing: 1px;" class="font-bold text-[14px] flex items-center gap-3">
-                                                        <span>พักรับประทานอาหาร และปฏิบัติศาสนกิจ</span>
-                                                        <i class="fas fa-utensils opacity-80" style="transform: rotate(90deg);"></i>
-                                                    </div>
-                                                </div>
-                                            </td>`;
-                                }
-                                i++;
-                                continue;
-                            }
-
-                            // Find matching slots
-                            let slots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
-                            let colspan = 1;
-
-                            if (slots.length > 0) {
-                                let nextI = i + 1;
-                                while (nextI <= maxPeriod && nextI !== breakPeriod) {
-                                    let nextSlots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === nextI);
-                                    if (window.areSlotsEqual(slots, nextSlots)) {
-                                        colspan++;
-                                        nextI++;
-                                    } else {
-                                        break;
-                                    }
-                                }
-                            }
-                                
-                            if(slots.length > 0) {
-                                let displaySlots = slots;
-                                if (type === 'teacher') {
-                                        let grouped = {};
-                                        slots.forEach(slot => {
-                                            let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
-                                            if (!grouped[key]) {
-                                                grouped[key] = { ...slot, allRooms: [slot['ห้องเรียน']] };
-                                            } else {
-                                                if (slot['ห้องเรียน'] !== '-' && !grouped[key].allRooms.includes(slot['ห้องเรียน'])) {
-                                                    grouped[key].allRooms.push(slot['ห้องเรียน']);
-                                                }
-                                            }
-                                        });
-                                        displaySlots = Object.values(grouped);
-                                    } else if (type === 'student') {
-                                        let grouped = {};
-                                        slots.forEach(slot => {
-                                            let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
-                                            if (!grouped[key]) {
-                                                grouped[key] = { ...slot, allTeachers: [slot['ชื่อครูผู้สอน']] };
-                                            } else {
-                                                if (!grouped[key].allTeachers.includes(slot['ชื่อครูผู้สอน'])) {
-                                                    grouped[key].allTeachers.push(slot['ชื่อครูผู้สอน']);
-                                                }
-                                            }
-                                        });
-                                        displaySlots = Object.values(grouped);
-                                    }
-
-                                    let cellContent = displaySlots.map(slot => {
-                                        let innerHtml = '';
-                                        if(settings.show_code) innerHtml += `<div class="font-bold text-xs">${slot['รหัสวิชา']}</div>`;
-                                        if(settings.show_name) innerHtml += `<div class="text-[11px] text-navy leading-tight">${slot['ชื่อวิชา']}</div>`;
-                                        
-                                        if(settings.show_teacher && type === 'student') {
-                                            let rawTeachers = slot.allTeachers ? slot.allTeachers.join(',') : slot['ชื่อครูผู้สอน'];
-                                            let teachersList = String(rawTeachers || '').split(',').map(t => t.trim()).filter(t => t);
-                                            let cleanNames = teachersList.map(tName => {
-                                                let rawName = String(tName || '').trim();
-                                                let cleanName = rawName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู)\s*/g, '').trim();
-                                                if (!cleanName) return '';
-                                                let shortName = cleanName.split(' ')[0];
-                                                let tInfo = teachers.find(t => String(t['ชื่อ-สกุล']).replace(/\s+/g, '') === rawName.replace(/\s+/g, ''));
-                                                if (tInfo) {
-                                                    let group = String(tInfo['กลุ่มสาระการเรียนรู้'] || '');
-                                                    let role = String(tInfo['บทบาท'] || '');
-                                                    if ((group.includes('ผู้อำนวยการ') && !group.includes('รอง')) || (role.includes('ผู้อำนวยการ') && !role.includes('รอง'))) return 'ผอ.' + shortName;
-                                                    if (group.includes('รองผู้อำนวยการ') || role.includes('รองผู้อำนวยการ')) return 'รอง' + shortName;
-                                                }
-                                                return 'ครู' + shortName;
-                                            }).filter(n => n);
-                                            let displayTeacher = [...new Set(cleanNames)].join(', ');
-                                            innerHtml += `<div class="text-[10px] text-blue-700 mt-1">${displayTeacher}</div>`;
-                                        }
-                                        
-                                        if(settings.show_room && type === 'teacher') {
-                                            if (slot.allRooms && slot.allRooms.length > 0) {
-                                                let rText = slot.allRooms.includes('-') ? 'ภารกิจพิเศษ' : slot.allRooms.join(', ');
-                                                innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${rText}</span></div>`;
-                                            } else {
-                                                let displayR = slot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : slot['ห้องเรียน'];
-                                                innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${displayR}</span></div>`;
-                                            }
-                                        }
-                                        
-                                        if(slot['สถานที่เรียน']) innerHtml += `<div class="text-[9px] text-gray-600 mt-0.5">${slot['สถานที่เรียน']}</div>`;
-
-                                        return `<div class="border-b border-blue-200 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">${innerHtml}</div>`;
-                                    }).join('');
-                                    
-                                    tds += `<td colspan="${colspan}" class="border border-navy p-1 text-center align-top bg-blue-50">${cellContent}</td>`;
-                                } else {
-                                    tds += `<td colspan="${colspan}" class="border border-navy p-2 text-center text-gray-300 align-middle">-</td>`;
-                                }
-                            
-                            i += colspan;
+                    // 1. ค้นหาห้องที่ตรงเงื่อนไขจากข้อมูลที่มีอยู่จริงๆ
+                    let roomsToProcess = [];
+                    Object.keys(processedData.student).forEach(r => {
+                        let matchGrade = false;
+                        if (selectedGrade === 'all') {
+                            matchGrade = true;
+                        } else if (r.startsWith('ม.' + selectedGrade + '/') || r === 'ม.' + selectedGrade) {
+                            matchGrade = true;
                         }
-                        trs += `<tr><td class="border border-navy p-2 font-bold text-center w-20 align-middle" style="background-color: ${c_day_bg}; color: ${c_day_text}; border-color: rgba(0,0,0,0.2);">${day}</td>${tds}</tr>`;
+
+                        let parts = r.split('/');
+                        let rNum = parts.length > 1 ? parts[1] : '';
+                        let matchNum = (selectedRoomNum === 'all') || (rNum === selectedRoomNum);
+
+                        if (matchGrade && matchNum) {
+                            roomsToProcess.push(r);
+                        }
                     });
 
-                    // สร้างชื่อไฟล์ตามเงื่อนไข (เพื่อใช้ตอนดาวน์โหลด)
-                    let cleanSubtitle = tableData.subtitle.replace(/&nbsp;\|&nbsp;/g, '_').replace(/<[^>]*>?/gm, '').replace(/[:/\s]+/g, '-');
-                    let filename = `ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'}_${cleanSubtitle}`;
+                    if (roomsToProcess.length === 0) {
+                        return Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลชั้น/ห้องตามเงื่อนไขที่เลือก (อาจจะยังไม่มีการจัดตารางให้ห้องนี้)', 'warning');
+                    }
 
-                    // ใส่ Container ตารางแต่ละอันต่อกัน (เพิ่ม crossorigin="anonymous" ให้ logo เพื่อให้วาดลง PDF ได้)
-                    allHtml += `
-                        <div class="timetable-page bg-white p-8 w-[1000px] shadow-lg relative border-t-4 border-navy rounded-sm" data-filename="${filename}">
-                            <div class="flex items-center justify-center mb-6 relative" style="min-height: 100px;">
-                                <div style="position: absolute; left: 0; top: 50%; transform: translateY(-50%);">
-                                    <img src="${settings.logo || 'https://www.ns.ac.th/wp-content/uploads/2024/12/cropped-logo-sq.png'}" crossorigin="anonymous" style="width: 96px; height: 96px; object-fit: contain;">
+                    roomsToProcess.forEach(roomKey => {
+                        let roomData = processedData.student[roomKey] || [];
+                        
+                        // 2. จัดกลุ่มข้อมูลในแต่ละห้องตาม 'แผนการเรียน' (สร้างแยกเป็น 1 ตารางต่อ 1 แผนการเรียน)
+                        let planGroups = {};
+                        roomData.forEach(slot => {
+                            let rawPlan = slot['แผนการเรียน'] || '-';
+                            // แยกข้อมูลแผนการเรียนด้วยลูกน้ำ (,) ออกจากกันเด็ดขาด
+                            let planList = rawPlan.split(',').map(p => p.trim()).filter(p => p);
+                            if (planList.length === 0) planList = ['-'];
+                            
+                            planList.forEach(planKey => {
+                                if (!planGroups[planKey]) planGroups[planKey] = [];
+                                planGroups[planKey].push(slot); // จัดเข้าแต่ละแผนการเรียนแบบแยกอิสระ
+                            });
+                        });
+
+                        // 3. กรองตามแผนการเรียนที่เลือกจาก Dropdown
+                        let plansToProcess = Object.keys(planGroups);
+                        if (selectedPlan !== 'all') {
+                            plansToProcess = plansToProcess.filter(p => p === selectedPlan);
+                        }
+
+                        // 4. นำเข้าข้อมูล (ตรงนี้จะสร้าง 1 ตารางต่อ 1 แผนการเรียนอัตโนมัติ)
+                        plansToProcess.forEach(planKey => {
+                            let pText = planKey === '-' ? 'ทั่วไป' : planKey;
+                            
+                            if (type === 'student') {
+                                tablesToRender.push({
+                                    type: 'student',
+                                    subtitle: `ชั้น/ห้อง: ${roomKey} &nbsp;|&nbsp; แผนการเรียน: ${pText}`,
+                                    scheduleMap: planGroups[planKey],
+                                    sortKey: roomKey + planKey
+                                });
+                            } else if (type === 'free_student') {
+                                // โหมดคาบว่างนักเรียน
+                                let scheduleMap = planGroups[planKey] || [];
+                                let freeSlots = [];
+                                let totalFree = 0;
+
+                                daysOfWeek.forEach(day => {
+                                    for(let i=1; i<=maxPeriod; i++) {
+                                        if (i === breakPeriod) continue;
+                                        let isBusy = scheduleMap.some(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
+                                        if (!isBusy) {
+                                            freeSlots.push({ day: day, period: i, time: getTimeForPeriod(i) });
+                                            totalFree++;
+                                        }
+                                    }
+                                });
+
+                                // สร้าง HTML คาบว่างนักเรียน
+                                let cleanSubtitle = `ชั้น/ห้อง: ${roomKey} | แผนการเรียน: ${pText}`;
+                                let filename = `คาบว่างนักเรียน_${roomKey}_แผน${pText}`.replace(/[:/\s]+/g, '-');
+                                
+                                let trsHtml = '';
+                                if (freeSlots.length > 0) {
+                                    trsHtml = freeSlots.map((fs, idx) => `
+                                        <tr class="hover:bg-gray-50 border-b border-gray-300">
+                                            <td class="p-3 text-center border-r border-gray-300">${idx+1}</td>
+                                            <td class="p-3 text-center border-r border-gray-300 font-bold text-navy" style="background-color: ${c_day_bg}20;">${fs.day}</td>
+                                            <td class="p-3 text-center border-r border-gray-300 font-bold">คาบ ${fs.period}</td>
+                                            <td class="p-3 text-center border-r border-gray-300 text-gray-700">${fs.time}</td>
+                                            <td class="p-3 text-center text-gray-400">-</td>
+                                        </tr>
+                                    `).join('');
+                                } else {
+                                    trsHtml = `<tr><td colspan="5" class="p-8 text-center text-gray-500 italic"><i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i><br>ไม่มีคาบว่าง (เรียนเต็มทุกคาบ)</td></tr>`;
+                                }
+
+                                allHtml += `
+                                    <div class="timetable-page bg-white p-8 w-[1000px] shadow-lg relative border-t-4 border-navy rounded-sm" data-filename="${filename}">
+                                        <div class="flex items-center justify-center mb-6 relative" style="min-height: 100px;">
+                                            <div style="position: absolute; left: 20px; top: 0; bottom: 0; display: flex; align-items: center; z-index: 10;">
+                                                <img src="${window._cachedBase64Logo}" style="width: 96px; height: 96px; object-fit: contain;">
+                                            </div>
+                                            <div class="text-center w-full">
+                                                <h2 class="text-2xl font-bold text-navy">${schoolName}</h2>
+                                                <h3 class="text-xl font-bold text-gold">รายงานคาบว่าง (นักเรียน) ภาคเรียนที่ ${settings.term}/${settings.year}</h3>
+                                                <p class="text-sm font-semibold mt-1 text-gray-700">${cleanSubtitle}</p>
+                                            </div>
+                                        </div>
+                                        <table class="w-full border-collapse border-2 border-navy text-sm">
+                                            <thead>
+                                                <tr style="background-color: ${c_th_bg}; color: ${c_th_text};">
+                                                    <th class="border border-navy p-3 w-16">ลำดับ</th>
+                                                    <th class="border border-navy p-3 w-32">วัน</th>
+                                                    <th class="border border-navy p-3 w-32">คาบที่</th>
+                                                    <th class="border border-navy p-3 w-40">เวลา</th>
+                                                    <th class="border border-navy p-3">หมายเหตุ</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>${trsHtml}</tbody>
+                                        </table>
+                                        <div class="mt-4 flex justify-between items-center">
+                                            <div class="text-[10px] text-gray-500">ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')}</div>
+                                            <div class="text-base font-bold text-navy bg-blue-50 px-4 py-2 border border-blue-200 rounded">สรุปจำนวนคาบว่าง: <span class="text-red-600 text-xl">${totalFree}</span> คาบ/สัปดาห์</div>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        });
+                    });
+
+                // ==========================================
+                // โหมด: ตารางสอน (ครู) หรือ คาบว่าง (ครู)
+                // ==========================================
+                } else {
+                    const selectedGroup = document.getElementById('dl_group').value;
+                    const selectedTeacher = document.getElementById('dl_teacher').value;
+
+                    // สร้าง Lookup สำหรับหากลุ่มสาระของครู
+                    const teacherGroupMap = {};
+                    teachers.forEach(t => { teacherGroupMap[t['ชื่อ-สกุล']] = t['กลุ่มสาระการเรียนรู้']; });
+
+                    let teachersToProcess = [];
+                    if (selectedTeacher !== 'all') {
+                        if (processedData.teacher[selectedTeacher] || type === 'free_teacher') {
+                            teachersToProcess = [selectedTeacher];
+                        }
+                    } else {
+                        // เลือก "ทุกคนในกลุ่มสาระ"
+                        teachersToProcess = Object.keys(processedData.teacher).filter(teacherKey => {
+                            let tGroup = teacherGroupMap[teacherKey];
+                            
+                            // ข้ามกิจกรรมหรือบุคคลที่ไม่มีกลุ่มสาระในฐานข้อมูลครูหลัก (เช่น ผู้กำกับลูกเสือ/ยุว)
+                            if (!tGroup || tGroup.trim() === '') return false;
+                            
+                            if (selectedGroup === 'all') return true;
+                            return tGroup === selectedGroup;
+                        });
+                        
+                        // กรณีคาบว่างครู ถ้าเลือกทุกกลุ่มสาระ ให้ดึงครูทุกคนในระบบมาเช็ค
+                        if(type === 'free_teacher' && teachersToProcess.length === 0) {
+                             teachersToProcess = teachers.filter(t => {
+                                 let tGroup = t['กลุ่มสาระการเรียนรู้'];
+                                 
+                                 // กรองคนที่ไม่ระบุกลุ่มสาระออกเช่นเดียวกัน
+                                 if (!tGroup || tGroup.trim() === '') return false;
+                                 
+                                 return selectedGroup === 'all' || tGroup === selectedGroup;
+                             }).map(t => t['ชื่อ-สกุล']);
+                        }
+                    }
+
+                    if (teachersToProcess.length === 0) {
+                        document.getElementById('timetableCanvas').innerHTML = `
+                            <div class="bg-white p-8 w-[1000px] shadow-lg relative text-center text-gray-400 mt-10 rounded-xl">
+                                <i class="fas fa-search text-4xl mb-2"></i><br>ไม่พบข้อมูลครูในกลุ่มสาระที่เลือก
+                            </div>
+                        `;
+                        return Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลครูในกลุ่มสาระที่เลือก', 'info');
+                    }
+
+                    teachersToProcess.forEach(teacherKey => {
+                        let tGroup = teacherGroupMap[teacherKey] || 'ไม่ระบุกลุ่มสาระ';
+                        let scheduleMap = processedData.teacher[teacherKey] || [];
+                        
+                        if (type === 'teacher') {
+                            let uniquePeriods = new Set(scheduleMap.map(s => s['วัน'] + '_' + s['คาบที่'])).size;
+                            tablesToRender.push({
+                                type: 'teacher',
+                                subtitle: `ครูผู้สอน: ${teacherKey} &nbsp;|&nbsp; กลุ่มสาระฯ: ${tGroup} &nbsp;|&nbsp; รวม: ${uniquePeriods} คาบ/สัปดาห์`,
+                                scheduleMap: scheduleMap,
+                                sortKey: tGroup + '_' + teacherKey 
+                            });
+                        } else if (type === 'free_teacher') {
+                            // โหมดคาบว่างครู
+                            let freeSlots = [];
+                            let totalFree = 0;
+
+                            daysOfWeek.forEach(day => {
+                                for(let i=1; i<=maxPeriod; i++) {
+                                    if (i === breakPeriod) continue;
+                                    let isBusy = scheduleMap.some(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
+                                    if (!isBusy) {
+                                        freeSlots.push({ day: day, period: i, time: getTimeForPeriod(i) });
+                                        totalFree++;
+                                    }
+                                }
+                            });
+
+                            let cleanSubtitle = `ครูผู้สอน: ${teacherKey} | กลุ่มสาระฯ: ${tGroup}`;
+                            let filename = `คาบว่างครู_${teacherKey}`.replace(/[:/\s]+/g, '-');
+                            
+                            let trsHtml = '';
+                            if (freeSlots.length > 0) {
+                                trsHtml = freeSlots.map((fs, idx) => `
+                                    <tr class="hover:bg-gray-50 border-b border-gray-300">
+                                        <td class="p-3 text-center border-r border-gray-300">${idx+1}</td>
+                                        <td class="p-3 text-center border-r border-gray-300 font-bold text-navy" style="background-color: ${c_day_bg}20;">${fs.day}</td>
+                                        <td class="p-3 text-center border-r border-gray-300 font-bold">คาบ ${fs.period}</td>
+                                        <td class="p-3 text-center border-r border-gray-300 text-gray-700">${fs.time}</td>
+                                        <td class="p-3 text-center text-gray-400">-</td>
+                                    </tr>
+                                `).join('');
+                            } else {
+                                trsHtml = `<tr><td colspan="5" class="p-8 text-center text-gray-500 italic"><i class="fas fa-check-circle text-green-500 text-2xl mb-2"></i><br>ไม่มีคาบว่าง (สอนเต็มทุกคาบ)</td></tr>`;
+                            }
+
+                            allHtml += `
+                                <div class="timetable-page bg-white p-8 w-[1000px] shadow-lg relative border-t-4 border-navy rounded-sm" data-filename="${filename}">
+                                    <div class="flex items-center justify-center mb-6 relative" style="min-height: 100px;">
+                                        <div style="position: absolute; left: 20px; top: 0; bottom: 0; display: flex; align-items: center; z-index: 10;">
+                                            <img src="${window._cachedBase64Logo}" style="width: 96px; height: 96px; object-fit: contain;">
+                                        </div>
+                                        <div class="text-center w-full">
+                                            <h2 class="text-2xl font-bold text-navy">${schoolName}</h2>
+                                            <h3 class="text-xl font-bold text-gold">รายงานคาบว่าง (ครู) ภาคเรียนที่ ${settings.term}/${settings.year}</h3>
+                                            <p class="text-sm font-semibold mt-1 text-gray-700">${cleanSubtitle}</p>
+                                        </div>
+                                    </div>
+                                    <table class="w-full border-collapse border-2 border-navy text-sm">
+                                        <thead>
+                                            <tr style="background-color: ${c_th_bg}; color: ${c_th_text};">
+                                                <th class="border border-navy p-3 w-16">ลำดับ</th>
+                                                <th class="border border-navy p-3 w-32">วัน</th>
+                                                <th class="border border-navy p-3 w-32">คาบที่</th>
+                                                <th class="border border-navy p-3 w-40">เวลา</th>
+                                                <th class="border border-navy p-3">หมายเหตุ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>${trsHtml}</tbody>
+                                    </table>
+                                    <div class="mt-4 flex justify-between items-center">
+                                        <div class="text-[10px] text-gray-500">ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')}</div>
+                                        <div class="text-base font-bold text-navy bg-blue-50 px-4 py-2 border border-blue-200 rounded">สรุปจำนวนคาบว่าง: <span class="text-red-600 text-xl">${totalFree}</span> คาบ/สัปดาห์</div>
+                                    </div>
                                 </div>
-                                <div class="text-center w-full">
-                                    <h2 class="text-2xl font-bold text-navy">${schoolName}</h2>
-                                    <h3 class="text-xl font-bold text-gold">ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'} ภาคเรียนที่ ${settings.term}/${settings.year}</h3>
-                                    <p class="text-sm font-semibold mt-1 text-gray-700">${tableData.subtitle}</p>
+                            `;
+                        }
+                    });
+                }
+                
+                // หากเป็นโหมดที่ต้องวาดตารางปกติ (student, teacher) ให้สร้าง HTML จาก tablesToRender
+                if (type === 'student' || type === 'teacher') {
+                    if (tablesToRender.length === 0) {
+                        document.getElementById('timetableCanvas').innerHTML = `
+                            <div class="bg-white p-8 w-[1000px] shadow-lg relative text-center text-gray-400 mt-10 rounded-xl">
+                                <i class="fas fa-search text-4xl mb-2"></i><br>ไม่พบข้อมูลตารางตามเงื่อนไขที่เลือก
+                            </div>
+                        `;
+                        return Swal.fire('แจ้งเตือน', 'ไม่พบข้อมูลตารางตามเงื่อนไขที่เลือก', 'info');
+                    }
+
+                    tablesToRender.sort((a,b) => a.sortKey.localeCompare(b.sortKey));
+
+                    let thsTemplate = '';
+                    let currentTimeMinHeader = initialTimeMin;
+                    for(let i=1; i<=maxPeriod; i++) {
+                        let isBreak = (i === breakPeriod);
+                        let currentDur = isBreak ? breakDuration : periodDuration;
+                        let startStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
+                        currentTimeMinHeader += currentDur;
+                        let endStr = Math.floor(currentTimeMinHeader/60).toString().padStart(2,'0') + ':' + (currentTimeMinHeader%60).toString().padStart(2,'0');
+                        
+                        let widthClass = isBreak ? 'w-16' : 'w-24';
+                        
+                        thsTemplate += `<th class="border border-navy p-2 ${widthClass} align-middle" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">
+                                    คาบ ${i}<br><span class="text-[10px] font-normal opacity-80">${startStr}-${endStr}</span>
+                                </th>`;
+                    }
+                    
+                    tablesToRender.forEach((tableData) => {
+                        let trs = '';
+                        daysOfWeek.forEach((day, dayIndex) => {
+                            let tds = '';
+                            let i = 1;
+                            while(i <= maxPeriod) {
+                                if (i === breakPeriod) {
+                                    if (dayIndex === 0) {
+                                        tds += `<td rowspan="5" class="border border-navy p-0 text-center align-middle w-16" style="background-color: ${c_break_bg}; color: ${c_break_text}; border-color: rgba(0,0,0,0.1);">
+                                                    <div style="height: 350px; position: relative; width: 100%;">
+                                                        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; letter-spacing: 1px;" class="font-bold text-[14px] flex items-center gap-3">
+                                                            <span>พักรับประทานอาหาร และปฏิบัติศาสนกิจ</span>
+                                                            <i class="fas fa-utensils opacity-80" style="transform: rotate(90deg);"></i>
+                                                        </div>
+                                                    </div>
+                                                </td>`;
+                                    }
+                                    i++;
+                                    continue;
+                                }
+
+                                let slots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === i);
+                                let colspan = 1;
+
+                                if (slots.length > 0) {
+                                    let nextI = i + 1;
+                                    while (nextI <= maxPeriod && nextI !== breakPeriod) {
+                                        let nextSlots = tableData.scheduleMap.filter(s => s['วัน'] === day && parseInt(s['คาบที่']) === nextI);
+                                        if (window.areSlotsEqual(slots, nextSlots)) {
+                                            colspan++;
+                                            nextI++;
+                                        } else {
+                                            break;
+                                        }
+                                    }
+                                }
+                                    
+                                if(slots.length > 0) {
+                                    let displaySlots = slots;
+                                    if (type === 'teacher') {
+                                            let grouped = {};
+                                            slots.forEach(slot => {
+                                                let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
+                                                if (!grouped[key]) {
+                                                    grouped[key] = { ...slot, allRooms: [slot['ห้องเรียน']] };
+                                                } else {
+                                                    if (slot['ห้องเรียน'] !== '-' && !grouped[key].allRooms.includes(slot['ห้องเรียน'])) {
+                                                        grouped[key].allRooms.push(slot['ห้องเรียน']);
+                                                    }
+                                                }
+                                            });
+                                            displaySlots = Object.values(grouped);
+                                        } else if (type === 'student') {
+                                            let grouped = {};
+                                            slots.forEach(slot => {
+                                                let key = `${slot['รหัสวิชา']}_${slot['สถานที่เรียน']}`;
+                                                if (!grouped[key]) {
+                                                    grouped[key] = { ...slot, allTeachers: [slot['ชื่อครูผู้สอน']] };
+                                                } else {
+                                                    if (!grouped[key].allTeachers.includes(slot['ชื่อครูผู้สอน'])) {
+                                                        grouped[key].allTeachers.push(slot['ชื่อครูผู้สอน']);
+                                                    }
+                                                }
+                                            });
+                                            displaySlots = Object.values(grouped);
+                                        }
+
+                                        let cellContent = displaySlots.map(slot => {
+                                            let innerHtml = '';
+                                            if(settings.show_code) innerHtml += `<div class="font-bold text-xs">${slot['รหัสวิชา']}</div>`;
+                                            if(settings.show_name) innerHtml += `<div class="text-[11px] text-navy leading-tight">${slot['ชื่อวิชา']}</div>`;
+                                            
+                                            if(settings.show_teacher && type === 'student') {
+                                                let rawTeachers = slot.allTeachers ? slot.allTeachers.join(',') : slot['ชื่อครูผู้สอน'];
+                                                let teachersList = String(rawTeachers || '').split(',').map(t => t.trim()).filter(t => t);
+                                                let cleanNames = teachersList.map(tName => {
+                                                    let rawName = String(tName || '').trim();
+                                                    // เพิ่มการกรองคำนำหน้า ผอ. และ รอง. ออกก่อนเพื่อป้องกันคำนำหน้าซ้ำซ้อน
+                                                    let cleanName = rawName.replace(/^(นาย|นางสาว|นาง|น\.ส\.|ว่าที่\s?ร\.ต\.|ว่าที่ร้อยตรี|ครู|ผอ\.|รอง\.|รอง)\s*/g, '').trim();
+                                                    if (!cleanName) return '';
+                                                    let shortName = cleanName.split(' ')[0];
+                                                    
+                                                    // ตรวจสอบข้อมูลจากฐานข้อมูลครู
+                                                    let tInfo = teachers.find(t => String(t['ชื่อ-สกุล']).replace(/\s+/g, '') === rawName.replace(/\s+/g, ''));
+                                                    if (tInfo) {
+                                                        let group = String(tInfo['กลุ่มสาระการเรียนรู้'] || '');
+                                                        let role = String(tInfo['บทบาท'] || '');
+                                                        let roleLower = role.toLowerCase();
+                                                        
+                                                        // ตรวจสอบสิทธิ์ รองผู้อำนวยการ
+                                                        if (group.includes('รองผู้อำนวยการ') || roleLower.includes('รองผู้อำนวยการ') || roleLower === 'deputy_director') {
+                                                            return 'รอง.' + shortName;
+                                                        }
+                                                        // ตรวจสอบสิทธิ์ ผู้อำนวยการ
+                                                        if (group.includes('ผู้อำนวยการ') || roleLower.includes('ผู้อำนวยการ') || roleLower === 'director') {
+                                                            return 'ผอ.' + shortName;
+                                                        }
+                                                    }
+                                                    return 'ครู' + shortName;
+                                                }).filter(n => n);
+                                                let displayTeacher = [...new Set(cleanNames)].join(', ');
+                                                innerHtml += `<div class="text-[10px] text-blue-700 mt-1">${displayTeacher}</div>`;
+                                            }
+                                            
+                                            if(settings.show_room && type === 'teacher') {
+                                                if (slot.allRooms && slot.allRooms.length > 0) {
+                                                    let rText = slot.allRooms.includes('-') ? 'ภารกิจพิเศษ' : slot.allRooms.join(', ');
+                                                    innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${rText}</span></div>`;
+                                                } else {
+                                                    let displayR = slot['ห้องเรียน'] === '-' ? 'ภารกิจพิเศษ' : slot['ห้องเรียน'];
+                                                    innerHtml += `<div class="text-[11px] text-gray-600 font-medium mt-1"><span class="text-red-600">${displayR}</span></div>`;
+                                                }
+                                            }
+                                            
+                                            if(slot['สถานที่เรียน']) innerHtml += `<div class="text-[9px] text-gray-600 mt-0.5">${slot['สถานที่เรียน']}</div>`;
+
+                                            return `<div class="border-b border-blue-200 pb-1 mb-1 last:border-0 last:pb-0 last:mb-0">${innerHtml}</div>`;
+                                        }).join('');
+                                        
+                                        tds += `<td colspan="${colspan}" class="border border-navy p-1 text-center align-top bg-blue-50">${cellContent}</td>`;
+                                    } else {
+                                        tds += `<td colspan="${colspan}" class="border border-navy p-2 text-center text-gray-300 align-middle">-</td>`;
+                                    }
+                                
+                                i += colspan;
+                            }
+                            trs += `<tr><td class="border border-navy p-2 font-bold text-center w-20 align-middle" style="background-color: ${c_day_bg}; color: ${c_day_text}; border-color: rgba(0,0,0,0.2);">${day}</td>${tds}</tr>`;
+                        });
+
+                        let cleanSubtitle = tableData.subtitle.replace(/&nbsp;\|&nbsp;/g, '_').replace(/<[^>]*>?/gm, '').replace(/[:/\s]+/g, '-');
+                        let filename = `ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'}_${cleanSubtitle}`;
+
+                        allHtml += `
+                            <div class="timetable-page bg-white p-8 w-[1000px] shadow-lg relative border-t-4 border-navy rounded-sm" data-filename="${filename}">
+                                <div class="flex items-center justify-center mb-6 relative" style="min-height: 100px;">
+                                    <div style="position: absolute; left: 20px; top: 0; bottom: 0; display: flex; align-items: center; z-index: 10;">
+                                        <img src="${window._cachedBase64Logo}" style="width: 96px; height: 96px; object-fit: contain;">
+                                    </div>
+                                    <div class="text-center w-full">
+                                        <h2 class="text-2xl font-bold text-navy">${schoolName}</h2>
+                                        <h3 class="text-xl font-bold text-gold">ตาราง${tableData.type === 'student' ? 'เรียน' : 'สอน'} ภาคเรียนที่ ${settings.term}/${settings.year}</h3>
+                                        <p class="text-sm font-semibold mt-1 text-gray-700">${tableData.subtitle}</p>
+                                    </div>
+                                </div>
+                                <table class="w-full border-collapse border-2 border-navy text-sm">
+                                    <thead>
+                                        <tr><th class="border border-navy p-2" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">วัน/คาบ</th>${thsTemplate}</tr>
+                                    </thead>
+                                    <tbody>${trs}</tbody>
+                                </table>
+                                <div class="mt-4 text-right text-[10px] text-gray-500">
+                                    ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')} | พัฒนาโดย ครูมูฮัมหมัดตัซกีน บาราเฮง
                                 </div>
                             </div>
-                            <table class="w-full border-collapse border-2 border-navy text-sm">
-                                <thead>
-                                    <tr><th class="border border-navy p-2" style="background-color: ${c_th_bg}; color: ${c_th_text}; border-color: rgba(255,255,255,0.2);">วัน/คาบ</th>${thsTemplate}</tr>
-                                </thead>
-                                <tbody>${trs}</tbody>
-                            </table>
-                            <div class="mt-4 text-right text-[10px] text-gray-500">
-                                ข้อมูล ณ วันที่: ${new Date().toLocaleDateString('th-TH')} | พัฒนาโดย ครูมูฮัมหมัดตัซกีน บาราเฮง
-                            </div>
-                        </div>
-                    `;
-                });
+                        `;
+                    });
+                }
 
                 document.getElementById('timetableCanvas').innerHTML = allHtml;
             };
 
-            // --- ฟังก์ชันดาวน์โหลด PDF (พร้อมหน้าต่างจัดรูปแบบ) ---
             window.printTimetable = () => {
                 const pages = document.querySelectorAll('.timetable-page');
-                if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงตาราง" ก่อนดาวน์โหลด PDF', 'warning');
+                if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงผล" ก่อนดาวน์โหลด PDF', 'warning');
 
                 let printContent = document.getElementById('timetableCanvas').innerHTML;
                 const printWindow = window.open('', '_blank');
@@ -6490,13 +6817,13 @@
                                     const marginStr = document.getElementById('margin').value;
                                     const margin = parseInt(marginStr.replace('mm', '')) || 10;
 
-                                    // รอโหลดรูประหว่างสร้าง PDF เพื่อให้โลโก้ไม่หาย
+                                    // รอโหลดรูประหว่างสร้าง PDF
                                     const images = document.querySelectorAll('img');
                                     await Promise.all(Array.from(images).map(img => {
                                         if (img.complete) return Promise.resolve();
                                         return new Promise(resolve => {
                                             img.onload = resolve;
-                                            img.onerror = resolve;
+                                            img.onerror = resolve; // ข้ามรูปที่มีปัญหาเลยเพื่อไม่ให้ PDF ค้าง
                                         });
                                     }));
 
@@ -6550,7 +6877,7 @@
                                         doc.addImage(imgData, 'JPEG', xOffset, yOffset, renderWidth, renderHeight);
                                     }
 
-                                    doc.save('ตารางสอน.pdf');
+                                    doc.save('ตารางสอน_คาบว่าง.pdf');
                                 } catch (err) {
                                     console.error(err);
                                     alert('เกิดข้อผิดพลาดในการสร้าง PDF');
@@ -6571,7 +6898,7 @@
                         <div class="preview-toolbar">
                             <div class="toolbar-top">
                                 <div style="font-size: 18pt; font-weight: bold; color: #f8fafc !important;">
-                                    <i class="fas fa-file-pdf mr-2"></i> ระบบพิมพ์ / ดาวน์โหลด PDF (ตารางสอน)
+                                    <i class="fas fa-file-pdf mr-2"></i> ระบบพิมพ์ / ดาวน์โหลด PDF
                                 </div>
                                 <div class="btn-container">
                                     <button id="btn-download-pdf" class="pdf-btn" onclick="downloadDirectPDF()">
@@ -6623,7 +6950,7 @@
 
             window.downloadAsJPG = async () => {
                 const pages = document.querySelectorAll('.timetable-page');
-                if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงตาราง" ก่อนดาวน์โหลด', 'warning');
+                if (pages.length === 0) return Swal.fire('แจ้งเตือน', 'กรุณากด "แสดงผล" ก่อนดาวน์โหลด', 'warning');
 
                 showLoading(true);
                 
